@@ -6,7 +6,7 @@ import pathlib
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer"
 MODEL = "MoCE_IR_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"
-EPOCHS = 2
+EPOCHS = 1
 BATCH_SIZE = 16  # 每个GPU的batch size 20
 LR = 2e-4
 

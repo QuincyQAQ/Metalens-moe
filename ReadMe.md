@@ -2,8 +2,8 @@
 
 推荐使用流程：
 
-1. 修改 `config.py`，确定模型、数据路径和训练超参。  
-2. 运行 `train.sh` 开始训练，等待 `experiment/` 下生成对应实验目录，训练完所有的epoch会生成测试数据在`train`文件夹 。  
+1. 修改 `config.py`，确定模型、数据路径和训练的超参。  
+2. 运行 `train.sh` 开始训练，等待 `experiment/` 下生成对应实验目录，训练完所有的epoch会生成测试数据在`train`文件夹。  
 3. 可以自己运行 `test.sh` 做评估（双卡全分辨率 `batch=1`），如果只是python test.py 的话只是单卡效果。  
 4. 如需对单张图像做推理，使用 `python infer_image.py --ckpt <ckpt> --input <img> --output <out>`。
 

@@ -528,8 +528,8 @@ def main(opt):
 
         # Load model
         ckpt_path = _resolve_ckpt_path(opt)
+        run_dir = ckpt_path.parent.parent if ckpt_path.parent.name == "checkpoints" else ckpt_path.parent
         if getattr(opt, "checkpoint_id", None) is None:
-            run_dir = ckpt_path.parent.parent if ckpt_path.parent.name == "checkpoints" else ckpt_path.parent
             opt.checkpoint_id = f"{run_dir.name}-{ckpt_path.stem}"
         print(f"[Test] Loading checkpoint from: {ckpt_path}")
 
@@ -645,6 +645,58 @@ def main(opt):
                             "count": row.get("count"),
                         }
                     )
+
+            exp_test_root = None
+            try:
+                exp_test_root = pathlib.Path(str(run_dir)).resolve() / "test"
+                exp_test_root.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                exp_test_root = None
+
+            if exp_test_root is not None:
+                exp_out_dir = exp_test_root / str(ckpt_path.stem)
+                exp_out_dir.mkdir(parents=True, exist_ok=True)
+
+                exp_metrics_json = exp_out_dir / "metrics.json"
+                with open(str(exp_metrics_json), "w") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+
+                exp_metrics_txt = exp_out_dir / "metrics.txt"
+                with open(str(exp_metrics_txt), "w") as f:
+                    for row in payload["metrics"]:
+                        f.write(
+                            f"benchmark={row.get('benchmark')} psnr={row.get('psnr')} ssim={row.get('ssim')} lpips={row.get('lpips')} count={row.get('count')}\n"
+                        )
+
+                exp_csv_path = exp_test_root / "test.csv"
+                exp_csv_exists = exp_csv_path.exists()
+                with open(str(exp_csv_path), "a", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(
+                        f,
+                        fieldnames=[
+                            "ckpt_path",
+                            "net_path",
+                            "benchmark",
+                            "psnr",
+                            "ssim",
+                            "lpips",
+                            "count",
+                        ],
+                    )
+                    if not exp_csv_exists:
+                        writer.writeheader()
+                    for row in payload.get("metrics", []) or []:
+                        writer.writerow(
+                            {
+                                "ckpt_path": ckpt_abs,
+                                "net_path": net_abs,
+                                "benchmark": row.get("benchmark"),
+                                "psnr": row.get("psnr"),
+                                "ssim": row.get("ssim"),
+                                "lpips": row.get("lpips"),
+                                "count": row.get("count"),
+                            }
+                        )
     except Exception as e:
         rank = os.environ.get("RANK")
         local_rank = os.environ.get("LOCAL_RANK")
