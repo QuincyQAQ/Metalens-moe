@@ -320,7 +320,12 @@ def main(opt):
     time_stamp = run_id
 
     project_dir = pathlib.Path(__file__).resolve().parent
-    base_exp_dir = project_dir / "experiment"
+    # 使用配置中的外部 experiment 目录
+    experiment_dir = getattr(opt, "experiment_dir", None)
+    if experiment_dir:
+        base_exp_dir = pathlib.Path(experiment_dir)
+    else:
+        base_exp_dir = project_dir / "experiment"
     base_exp_dir.mkdir(parents=True, exist_ok=True)
 
     log_dir = base_exp_dir / time_stamp

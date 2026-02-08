@@ -390,12 +390,13 @@ def run_test(opts, device: torch.device, net, dataset, ddp_enabled: bool, rank: 
     )
 
     if opts.save_results:
-        out_dir = pathlib.Path(
-            os.path.join(
-                os.getcwd(),
-                f"results/{opts.checkpoint_id}/{opts.benchmarks[0]}/rank{rank}",
-            )
-        )
+        # 使用配置中的 results_dir，如果不存在则使用默认值
+        results_base = getattr(opts, "results_dir", "results")
+        results_base_path = pathlib.Path(str(results_base)).expanduser()
+        if not results_base_path.is_absolute():
+            project_dir = pathlib.Path(__file__).resolve().parent
+            results_base_path = (project_dir / results_base_path).resolve()
+        out_dir = results_base_path / str(opts.checkpoint_id) / str(opts.benchmarks[0]) / f"rank{rank}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
     calc_lpips = LearnedPerceptualImagePatchSimilarity(
@@ -584,8 +585,14 @@ def main(opt):
                 })
 
         if rank == 0:
-            result_root = os.environ.get("MOCEIR_TEST_RESULT_DIR", "test")
+            # 优先使用环境变量，其次使用配置中的 test_dir，最后使用默认值
+            result_root = os.environ.get("MOCEIR_TEST_RESULT_DIR", None)
+            if result_root is None:
+                result_root = getattr(opt, "test_dir", "test")
             result_root_path = pathlib.Path(str(result_root)).expanduser()
+            if not result_root_path.is_absolute():
+                project_dir = pathlib.Path(__file__).resolve().parent
+                result_root_path = (project_dir / result_root_path).resolve()
             result_root_path.mkdir(parents=True, exist_ok=True)
 
             ckpt_str = str(ckpt_path)

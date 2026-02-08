@@ -4,11 +4,13 @@ import pathlib
 # ============================================================================
 # 基础训练设置
 # ============================================================================
-# MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer"
-MODEL = "MoCE_IR_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"
+# MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
+MODEL = "MoCE_IR_Spectral_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"或者 MoCE_IR_PhysRouting 或 "MoCE_IR_Spectral"
 EPOCHS = 1
 BATCH_SIZE = 16  # 每个GPU的batch size 20
+VAL_EVERY_N_EPOCH = 1  # 每多少个epoch做一次验证
 LR = 2e-4
+
 
 DE_TYPE = ["deblur"]  # 可选: "denoise_15/25/50", "dehaze", "derain", "deblur", "synllie"
 TRAINSET = "standard"  # "standard" 或 "CDD11_*"
@@ -44,7 +46,7 @@ TF32 = True
 LOG_EVERY_N_STEPS = 10
 PREFETCH_FACTOR = 4
 PERSISTENT_WORKERS = True
-VAL_EVERY_N_EPOCH = 5  # 每多少个epoch做一次验证
+
 
 # ============================================================================
 # 路径设置
@@ -56,8 +58,17 @@ NUM_GPUS = 2
 NUM_WORKERS = 12
 
 # 路径设置
-DATA_FILE_DIR = "../../data/open_dataset_8_1_1"
-# ckpt 根目录：包含各个 experiment 子目录
-CKPT_DIR = "../moceir/experiment"
+DATA_FILE_DIR = "../../data/open_dataset_8_1_1_mini"
+# experiment 根目录：训练产生的所有实验目录（checkpoints、metrics等）
+# 相对于项目目录的路径，或使用绝对路径
+EXPERIMENT_DIR = "../experiment"
+# test 根目录：测试结果保存目录
+# 相对于项目目录的路径，或使用绝对路径
+TEST_DIR = "../test"
+# results 根目录：测试时保存的恢复图像结果
+# 相对于项目目录的路径，或使用绝对路径
+RESULTS_DIR = "../results"
+# ckpt 根目录：包含各个 experiment 子目录（用于测试时指定checkpoint路径）
+CKPT_DIR = "../experiment"
 # 具体要测的那一次实验的子目录（到 checkpoints 这一层）
 CHECKPOINT_ID = "2026_01_22_20_18_57/checkpoints"  # 例子，换成你自己的

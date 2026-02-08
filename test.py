@@ -31,6 +31,98 @@ from utils.test_utils import save_img
 from utils.image_utils import crop_img
 from data.dataset_utils import IRBenchmarks, CDD11
 
+try:
+    from fvcore.nn import FlopCountAnalysis
+    FVCORE_AVAILABLE = True
+except ImportError:
+    FVCORE_AVAILABLE = False
+    try:
+        from utils.model_summary import get_params_flops
+        MODEL_SUMMARY_AVAILABLE = True
+    except ImportError:
+        MODEL_SUMMARY_AVAILABLE = False
+
+
+def _calculate_model_complexity(net, input_size=(1, 3, 256, 256)):
+    """计算模型的 GFLOPs 和参数量（百万）"""
+    try:
+        # 确保模型在 eval 模式
+        net.eval()
+        
+        # 获取设备和数据类型
+        try:
+            device = next(net.parameters()).device
+            dtype = next(net.parameters()).dtype
+        except StopIteration:
+            # 如果没有参数，返回 None
+            return None, None
+        
+        # 计算参数量（百万）
+        try:
+            num_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+            num_params_m = num_params / 1e6
+        except Exception as e:
+            print(f"[Warn] Failed to calculate parameters: {e}")
+            num_params_m = None
+        
+        # 计算 GFLOPs
+        gflops = None
+        if FVCORE_AVAILABLE:
+            try:
+                with torch.no_grad():
+                    dummy_input = torch.randn(*input_size, device=device, dtype=dtype)
+                    flops = FlopCountAnalysis(net, dummy_input)
+                    total_flops = flops.total()
+                    gflops = total_flops / 1e9
+            except Exception as e:
+                print(f"[Warn] Failed to calculate FLOPs with fvcore: {e}")
+        
+        if gflops is None and MODEL_SUMMARY_AVAILABLE:
+            try:
+                with torch.no_grad():
+                    flops, params = get_params_flops(net, input_dim=input_size[1:])
+                    gflops = flops
+            except Exception as e:
+                print(f"[Warn] Failed to calculate FLOPs with model_summary: {e}")
+        
+        return gflops, num_params_m
+    except Exception as e:
+        print(f"[Warn] Failed to calculate model complexity: {e}")
+        traceback.print_exc()
+        return None, None
+
+
+def _extract_net_name(ckpt_path, net_path=None):
+    """从 checkpoint 路径或网络路径中提取网络名称"""
+    # 首先尝试从 checkpoint 路径中提取（格式：.../MoCE_IR_S-2026_02_01_00_28_26/...）
+    try:
+        ckpt_path_obj = pathlib.Path(ckpt_path)
+        # 向上查找包含模型名的目录
+        for parent in ckpt_path_obj.parents:
+            parent_name = parent.name
+            # 检查是否是实验目录格式（模型名-时间戳）
+            if "-" in parent_name and len(parent_name.split("-")) >= 2:
+                parts = parent_name.split("-")
+                # 尝试找到模型名（通常在第一部分或前几部分）
+                if len(parts) >= 2:
+                    # 检查是否是日期格式（YYYY_MM_DD）
+                    if len(parts[-1].split("_")) >= 3:
+                        # 提取模型名（去掉时间戳部分）
+                        net_name = "-".join(parts[:-1])
+                        return net_name
+        
+        # 如果没找到，尝试从 net_path 中提取
+        if net_path:
+            net_path_obj = pathlib.Path(net_path)
+            net_file = net_path_obj.name
+            if net_file.endswith(".py"):
+                net_name = net_file[:-3]  # 去掉 .py 后缀
+                return net_name
+    except Exception as e:
+        print(f"[Warn] Failed to extract net_name: {e}")
+    
+    return "Unknown"
+
 
 
 def _resolve_test_mixed_precision(opt) -> str:
@@ -395,10 +487,13 @@ def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
         testloader = accelerator.prepare(testloader)
     
     if opts.save_results:
-        out_dir = pathlib.Path(os.path.join(
-            os.getcwd(),
-            f"results/{opts.checkpoint_id}/{opts.benchmarks[0]}/rank{accelerator.process_index}",
-        ))
+        # 使用配置中的 results_dir，如果不存在则使用默认值
+        results_base = getattr(opts, "results_dir", "results")
+        results_base_path = pathlib.Path(str(results_base)).expanduser()
+        if not results_base_path.is_absolute():
+            project_dir = pathlib.Path(__file__).resolve().parent
+            results_base_path = (project_dir / results_base_path).resolve()
+        out_dir = results_base_path / str(opts.checkpoint_id) / str(opts.benchmarks[0]) / f"rank{accelerator.process_index}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
     calc_lpips = LearnedPerceptualImagePatchSimilarity(
@@ -553,6 +648,29 @@ def main(opt):
         net = accelerator.prepare(net)
         net.eval()
         
+        # 计算模型复杂度（只在主进程计算一次）
+        gflops = None
+        parameters = None
+        if accelerator.is_main_process:
+            print("[Test] Calculating model complexity...")
+            try:
+                unwrapped_net = accelerator.unwrap_model(net)
+                gflops, parameters = _calculate_model_complexity(unwrapped_net)
+                if gflops is not None:
+                    print(f"[Test] Model complexity: {gflops:.2f} GFLOPs, {parameters:.2f}M parameters")
+                elif parameters is not None:
+                    print(f"[Test] Model parameters: {parameters:.2f}M (GFLOPs calculation failed)")
+                else:
+                    print(f"[Test] Failed to calculate model complexity")
+            except Exception as e:
+                print(f"[Test] Error calculating model complexity: {e}")
+                traceback.print_exc()
+                gflops = None
+                parameters = None
+        
+        # 确保所有进程同步（等待主进程完成计算）
+        accelerator.wait_for_everyone()
+        
         for de in opt.benchmarks:
             ind_opt = opt
             ind_opt.benchmarks = [de]
@@ -577,8 +695,14 @@ def main(opt):
                 })
 
         if accelerator.is_main_process:
-            result_root = os.environ.get("MOCEIR_TEST_RESULT_DIR", "test")
+            # 优先使用环境变量，其次使用配置中的 test_dir，最后使用默认值
+            result_root = os.environ.get("MOCEIR_TEST_RESULT_DIR", None)
+            if result_root is None:
+                result_root = getattr(opt, "test_dir", "test")
             result_root_path = pathlib.Path(str(result_root)).expanduser()
+            if not result_root_path.is_absolute():
+                project_dir = pathlib.Path(__file__).resolve().parent
+                result_root_path = (project_dir / result_root_path).resolve()
             result_root_path.mkdir(parents=True, exist_ok=True)
 
             ckpt_abs = str(ckpt_path.resolve())
@@ -588,6 +712,9 @@ def main(opt):
             except Exception:
                 net_abs = str(getattr(module, "__file__", ""))
 
+            # 提取网络名称
+            net_name = _extract_net_name(ckpt_abs, net_abs)
+
             ckpt_str = str(ckpt_path)
             ckpt_name = ckpt_path.stem
             ckpt_parent = ckpt_path.parent.name
@@ -596,6 +723,9 @@ def main(opt):
             out_dir.mkdir(parents=True, exist_ok=True)
 
             payload = {
+                "net_name": net_name,
+                "gflops": gflops,
+                "parameters": parameters,
                 "ckpt_path": ckpt_str,
                 "ckpt_name": ckpt_name,
                 "ckpt_parent": ckpt_parent,
@@ -618,31 +748,36 @@ def main(opt):
 
             csv_path = result_root_path / "test.csv"
             csv_exists = csv_path.exists()
+            # 新的列顺序：net_name, gflops, parameters, benchmark, psnr, ssim, lpips, count, ckpt_path, net_path
+            fieldnames = [
+                "net_name",
+                "gflops",
+                "parameters",
+                "benchmark",
+                "psnr",
+                "ssim",
+                "lpips",
+                "count",
+                "ckpt_path",
+                "net_path",
+            ]
             with open(str(csv_path), "a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(
-                    f,
-                    fieldnames=[
-                        "ckpt_path",
-                        "net_path",
-                        "benchmark",
-                        "psnr",
-                        "ssim",
-                        "lpips",
-                        "count",
-                    ],
-                )
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 if not csv_exists:
                     writer.writeheader()
                 for row in payload.get("metrics", []) or []:
                     writer.writerow(
                         {
+                            "net_name": net_name,
+                            "gflops": f"{gflops:.4f}" if gflops is not None else "",
+                            "parameters": f"{parameters:.4f}" if parameters is not None else "",
+                            "benchmark": row.get("benchmark", ""),
+                            "psnr": row.get("psnr", ""),
+                            "ssim": row.get("ssim", ""),
+                            "lpips": row.get("lpips", ""),
+                            "count": row.get("count", ""),
                             "ckpt_path": ckpt_abs,
                             "net_path": net_abs,
-                            "benchmark": row.get("benchmark"),
-                            "psnr": row.get("psnr"),
-                            "ssim": row.get("ssim"),
-                            "lpips": row.get("lpips"),
-                            "count": row.get("count"),
                         }
                     )
 
@@ -670,31 +805,35 @@ def main(opt):
 
                 exp_csv_path = exp_test_root / "test.csv"
                 exp_csv_exists = exp_csv_path.exists()
+                fieldnames = [
+                    "net_name",
+                    "gflops",
+                    "parameters",
+                    "benchmark",
+                    "psnr",
+                    "ssim",
+                    "lpips",
+                    "count",
+                    "ckpt_path",
+                    "net_path",
+                ]
                 with open(str(exp_csv_path), "a", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(
-                        f,
-                        fieldnames=[
-                            "ckpt_path",
-                            "net_path",
-                            "benchmark",
-                            "psnr",
-                            "ssim",
-                            "lpips",
-                            "count",
-                        ],
-                    )
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
                     if not exp_csv_exists:
                         writer.writeheader()
                     for row in payload.get("metrics", []) or []:
                         writer.writerow(
                             {
+                                "net_name": net_name,
+                                "gflops": f"{gflops:.4f}" if gflops is not None else "",
+                                "parameters": f"{parameters:.4f}" if parameters is not None else "",
+                                "benchmark": row.get("benchmark", ""),
+                                "psnr": row.get("psnr", ""),
+                                "ssim": row.get("ssim", ""),
+                                "lpips": row.get("lpips", ""),
+                                "count": row.get("count", ""),
                                 "ckpt_path": ckpt_abs,
                                 "net_path": net_abs,
-                                "benchmark": row.get("benchmark"),
-                                "psnr": row.get("psnr"),
-                                "ssim": row.get("ssim"),
-                                "lpips": row.get("lpips"),
-                                "count": row.get("count"),
                             }
                         )
     except Exception as e:
@@ -723,17 +862,50 @@ def str2bool(v):
     
     
 if __name__ == '__main__':
+    # test.py 作为函数库，__main__ 部分只从环境变量读取配置（由 train.sh 或 test.sh 设置）
+    # 这样 train.sh 可以通过环境变量调用 test.py 的测试模块
+    
+    # 从环境变量读取配置（优先级：环境变量 > None，让 _resolve_ckpt_path 处理）
+    ckpt_path = os.environ.get("MOCEIR_TEST_CKPT_PATH", None)
+    data_file_dir = os.environ.get("MOCEIR_TEST_DATA_FILE_DIR", None)
+    trainset = os.environ.get("MOCEIR_TEST_TRAINSET", None)
+    benchmarks_str = os.environ.get("MOCEIR_TEST_BENCHMARKS", None)
+    de_type_str = os.environ.get("MOCEIR_TEST_DE_TYPE", None)
+    patch_size_str = os.environ.get("MOCEIR_TEST_PATCH_SIZE", None)
+    batch_size_str = os.environ.get("MOCEIR_TEST_BATCH_SIZE", None)
+    save_results_str = os.environ.get("MOCEIR_TEST_SAVE_RESULTS", None)
+    precision = os.environ.get("MOCEIR_TEST_PRECISION", None)
+    full_res_eval_str = os.environ.get("MOCEIR_TEST_FULL_RES_EVAL", None)
+    
+    # 解析 benchmarks
+    benchmarks = ["gopro"]  # 默认值
+    if benchmarks_str:
+        benchmarks = [x.strip() for x in benchmarks_str.split(",")]
+    
+    # 解析 de_type
+    de_type = ["deblur"]  # 默认值
+    if de_type_str:
+        de_type = [x.strip() for x in de_type_str.split(",")]
+    
+    # 解析其他参数
+    patch_size = int(patch_size_str) if patch_size_str else 256
+    batch_size = int(batch_size_str) if batch_size_str else 1
+    save_results = str2bool(save_results_str) if save_results_str else False
+    if precision is None:
+        precision = "fp16"  # 默认值
+    full_res_eval = str2bool(full_res_eval_str) if full_res_eval_str else True
+    
     train_opt = argparse.Namespace(
-        ckpt_path="/media/wsqlab/more/lqj/models/MoCE_IR_S-2026_01_29_23_33_45/checkpoints/best_psnr_ssim-epoch=0-psnr=13.747-ssim=0.1999.ckpt",
+        ckpt_path=ckpt_path,
         model=None,
-        data_file_dir="/media/wsqlab/more/lqj/data/open_dataset_8_1_1",
-        trainset="standard",
-        benchmarks=["gopro"],
-        de_type=["deblur"],
-        patch_size=256,
-        batch_size=1,
-        save_results=False,
-        precision="fp16",  # "no"(fp32) / "fp16" / "bf16"
-        full_res_eval=True,
+        data_file_dir=data_file_dir,
+        trainset=trainset,
+        benchmarks=benchmarks,
+        de_type=de_type,
+        patch_size=patch_size,
+        batch_size=batch_size,
+        save_results=save_results,
+        precision=precision,
+        full_res_eval=full_res_eval,
     )
     main(train_opt)

@@ -13,7 +13,9 @@ fi
 
 CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 train.py
 
-CKPT_DIR="experiment/${MOCEIRV2_RUN_ID}/checkpoints"
+# 使用配置中的 experiment_dir，如果不存在则使用默认值
+EXPERIMENT_DIR=$(python -c 'import config; from pathlib import Path; import os; p = Path(getattr(config, "EXPERIMENT_DIR", "../experiment")); print(str(p.resolve()) if not p.is_absolute() else str(p))' 2>/dev/null || echo "../experiment")
+CKPT_DIR="${EXPERIMENT_DIR}/${MOCEIRV2_RUN_ID}/checkpoints"
 
 BEST_CKPT=""
 BEST_CKPT=$(ls -1t "${CKPT_DIR}"/best_psnr_ssim*.ckpt 2>/dev/null | head -n 1 || true)
@@ -25,4 +27,21 @@ if [ -z "$BEST_CKPT" ]; then
 fi
 
 export MOCEIR_TEST_CKPT_PATH="$(readlink -f "$BEST_CKPT")"
+
+# 传递训练时使用的 data_file_dir 和 trainset，确保测试使用与训练相同的数据集
+# 使用 options.py 中的逻辑来获取配置，确保路径解析一致
+DATA_FILE_DIR=$(python -c 'from options import train_options; opt = train_options(); print(opt.data_file_dir)' 2>/dev/null || echo "")
+TRAINSET=$(python -c 'import config; print(str(getattr(config, "TRAINSET", "standard")))' 2>/dev/null || echo "standard")
+DE_TYPE=$(python -c 'import config; de_type = getattr(config, "DE_TYPE", ["deblur"]); print(",".join(de_type))' 2>/dev/null || echo "deblur")
+
+if [ -n "$DATA_FILE_DIR" ]; then
+    export MOCEIR_TEST_DATA_FILE_DIR="$DATA_FILE_DIR"
+fi
+if [ -n "$TRAINSET" ]; then
+    export MOCEIR_TEST_TRAINSET="$TRAINSET"
+fi
+if [ -n "$DE_TYPE" ]; then
+    export MOCEIR_TEST_DE_TYPE="$DE_TYPE"
+fi
+
 bash test.sh

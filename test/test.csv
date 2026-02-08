@@ -1,2 +1,0 @@
-ckpt_path,net_path,benchmark,psnr,ssim,lpips,count
-/media/wsqlab/more/lqj/moceir/moceirv1-20260130_acc/experiment/MoCE_IR_S-2026_01_31_22_04_50/checkpoints/best_psnr_ssim-epoch=0-psnr=15.719-ssim=0.3854.ckpt,/media/wsqlab/more/lqj/moceir/moceirv1-20260130_acc/experiment/MoCE_IR_S-2026_01_31_22_04_50/net_snapshot/MoCE_IR_S.py,gopro,15.805335284829916,0.4234143438906953,0.8885309353895697,1999

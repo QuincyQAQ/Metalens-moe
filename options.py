@@ -54,6 +54,28 @@ def train_options():
         ckpt_dir = ckpt_dir.resolve()
     ckpt_dir = str(ckpt_dir)
 
+    # 处理外部目录路径
+    experiment_dir = Path(str(getattr(config, "EXPERIMENT_DIR", "../experiment"))).expanduser()
+    if not experiment_dir.is_absolute():
+        experiment_dir = (project_dir / experiment_dir).resolve()
+    else:
+        experiment_dir = experiment_dir.resolve()
+    experiment_dir = str(experiment_dir)
+
+    test_dir = Path(str(getattr(config, "TEST_DIR", "../test"))).expanduser()
+    if not test_dir.is_absolute():
+        test_dir = (project_dir / test_dir).resolve()
+    else:
+        test_dir = test_dir.resolve()
+    test_dir = str(test_dir)
+
+    results_dir = Path(str(getattr(config, "RESULTS_DIR", "../results"))).expanduser()
+    if not results_dir.is_absolute():
+        results_dir = (project_dir / results_dir).resolve()
+    else:
+        results_dir = results_dir.resolve()
+    results_dir = str(results_dir)
+
     # 如果路径不存在，尝试做一次“大小写 Data/data”纠正（常见于 /media 下手工输入）
     if not os.path.exists(data_file_dir):
         alt = None
@@ -110,6 +132,9 @@ def train_options():
         output_path=config.OUTPUT_PATH,
         wblogger=config.WBLOGGER,
         ckpt_dir=ckpt_dir,
+        experiment_dir=experiment_dir,
+        test_dir=test_dir,
+        results_dir=results_dir,
         num_gpus=config.NUM_GPUS,
     )
 
