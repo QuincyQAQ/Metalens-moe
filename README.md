@@ -1,12 +1,12 @@
-## 项目说明（MoCE-IR 多网络版本）
+## Metalens-moe 多网络版本）
 
 ### 项目目录结构
 
 本项目采用分离式目录结构，将代码和训练产生的数据分开存储，便于版本控制和代码管理：
 
 ```
-/media/wsqlab/more/lqj/moceir/
-├── moceir/                    # 项目代码目录（可上传到 GitHub）
+/media/wsqlab/more/lqj/Metalens-moe/
+├── Metalens-moe/              # 项目代码目录（可上传到 GitHub）
 │   ├── config.py              # 配置文件
 │   ├── train.py               # 训练脚本
 │   ├── test.py                # 测试脚本
@@ -41,7 +41,7 @@
 
 **目录说明：**
 
-- **`moceir/`**：项目代码目录，包含所有源代码和配置文件，可以上传到 GitHub。
+- **`Metalens-moe/`**：项目代码目录，包含所有源代码和配置文件，可以上传到 GitHub。
 - **`experiment/`**：训练产生的所有实验数据，包括：
   - `checkpoints/`：模型权重文件
   - `net_snapshot/`：训练时使用的网络文件副本（用于测试时加载）
