@@ -1,4 +1,4 @@
-## Metalens-moe 多网络版本）
+## Metalens-moe 多网络版本
 
 ### 项目目录结构
 
