@@ -5,16 +5,16 @@ import pathlib
 # 基础训练设置
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
-MODEL = "MoCE_IR_Spectral_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"或者 MoCE_IR_PhysRouting 或 "MoCE_IR_Spectral"
-EPOCHS = 1
+MODEL = "MoCE_IR_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"或者 MoCE_IR_PhysRouting 或 "MoCE_IR_Spectral"
+EPOCHS = 400
 BATCH_SIZE = 16  # 每个GPU的batch size 20
-VAL_EVERY_N_EPOCH = 1  # 每多少个epoch做一次验证
+VAL_EVERY_N_EPOCH = 20  # 每多少个epoch做一次验证
 LR = 2e-4
 
 
 DE_TYPE = ["deblur"]  # 可选: "denoise_15/25/50", "dehaze", "derain", "deblur", "synllie"
 TRAINSET = "standard"  # "standard" 或 "CDD11_*"
-LOSS_TYPE = "focal_l1"  # "L1" 或 "fft" focal_l1
+LOSS_TYPE = "L1"  # "L1" 或 "fft" focal_l1
 PATCH_SIZE = 128
 BALANCE_LOSS_WEIGHT = 0.01
 FFT_LOSS_WEIGHT = 1.0
@@ -58,8 +58,8 @@ NUM_GPUS = 2
 NUM_WORKERS = 12
 
 # 路径设置
-DATA_FILE_DIR = "../../data/open_dataset_8_1_1_mini"
-# experiment 根目录：训练产生的所有实验目录（checkpoints、metrics等）
+DATA_FILE_DIR = "../../data/Endovis17_8_1_1"
+# experiment 根目录：训练产生的所有实验目录（checkpoints、metrics等）Endovis17_8_1_1
 # 相对于项目目录的路径，或使用绝对路径
 EXPERIMENT_DIR = "../experiment"
 # test 根目录：测试结果保存目录
