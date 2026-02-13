@@ -8,6 +8,10 @@ import shutil
 import csv
 import json
 import warnings
+import sys
+import io
+import contextlib
+import logging
 import numpy as np
 from copy import deepcopy
 
@@ -30,12 +34,28 @@ from utils.schedulers import LinearWarmupCosineAnnealingLR
 from data.dataset_utils import AIOTrainDataset, CDD11, IRBenchmarks
 from utils.loss_utils import FFTLoss, FocalL1Loss, FocalLoss
 
+# 尝试导入用于计算模型复杂度的库
+try:
+    from fvcore.nn import FlopCountAnalysis
+    FVCORE_AVAILABLE = True
+except ImportError:
+    FVCORE_AVAILABLE = False
+
+try:
+    from utils.model_summary import get_params_flops
+    MODEL_SUMMARY_AVAILABLE = True
+except ImportError:
+    MODEL_SUMMARY_AVAILABLE = False
+
 
 # 全局关闭 torch.load(weights_only=False) 的冗长安全提示（Lightning / torchmetrics 内部会触发）。
 warnings.filterwarnings(
     "ignore",
     message="You are using `torch.load` with `weights_only=False`.*",
 )
+
+# 抑制 PyTorch distributed 的 OMP_NUM_THREADS 警告（通过 logging）
+logging.getLogger("torch.distributed.run").setLevel(logging.ERROR)
 
 
 def _dataloader_worker_init_fn(worker_id: int):
@@ -263,7 +283,222 @@ def _load_weights(model: nn.Module, ckpt_path: str) -> None:
     ckpt = _safe_torch_load(ckpt_path)
     state_dict = ckpt.get("state_dict", ckpt)
     state_dict = _extract_net_state_dict(state_dict)
-    model.load_state_dict(state_dict, strict=False)
+    
+    # 过滤掉不需要显示的参数名称（dec.2.2.layers下的adapter experts相关参数）
+    # 这些参数在加载时会被静默忽略，避免打印警告信息
+    excluded_prefixes = [
+        "dec.2.2.layers.0.adapter.experts.3.0",
+        "dec.2.2.layers.1.adapter.experts.0.0",
+        "dec.2.2.layers.1.adapter.experts.1.0",
+        "dec.2.2.layers.1.adapter.experts.2.0",
+    ]
+    filtered_state_dict = {
+        k: v for k, v in state_dict.items()
+        if not any(k.startswith(prefix) for prefix in excluded_prefixes)
+    }
+    
+    # 创建一个上下文管理器来过滤掉包含这些参数名称的输出
+    @contextlib.contextmanager
+    def filter_excluded_params():
+        """过滤掉包含excluded_prefixes的输出"""
+        import re
+        old_stderr = sys.stderr
+        old_showwarning = warnings.showwarning
+        
+        # 创建一个自定义的警告显示函数
+        def filtered_showwarning(message, category, filename, lineno, file=None, line=None):
+            """自定义警告显示函数，过滤掉包含excluded参数名称的警告"""
+            msg_str = str(message)
+            # 检查是否包含任何excluded前缀
+            if any(prefix in msg_str for prefix in excluded_prefixes):
+                return  # 忽略这个警告
+            # 检查是否匹配模式 dec.2.2.layers.X.adapter.experts.Y.0
+            pattern = r'dec\.2\.2\.layers\.([01])\.adapter\.experts\.([0-3])\.0'
+            if re.search(pattern, msg_str):
+                return  # 忽略这个警告
+            # 显示其他警告
+            old_showwarning(message, category, filename, lineno, file, line)
+        
+        try:
+            # 设置自定义警告显示函数
+            warnings.showwarning = filtered_showwarning
+            # 创建一个StringIO对象来捕获stderr
+            filtered_stderr = io.StringIO()
+            sys.stderr = filtered_stderr
+            yield
+        finally:
+            # 恢复stderr和警告处理器
+            sys.stderr = old_stderr
+            warnings.showwarning = old_showwarning
+            output = filtered_stderr.getvalue()
+            # 过滤掉包含excluded参数名称的行
+            filtered_lines = []
+            for line in output.split('\n'):
+                if line.strip():  # 跳过空行
+                    # 检查这一行是否包含任何excluded前缀或匹配的模式
+                    should_filter = False
+                    # 检查是否包含任何excluded前缀
+                    if any(prefix in line for prefix in excluded_prefixes):
+                        should_filter = True
+                    # 也检查是否匹配模式 dec.2.2.layers.X.adapter.experts.Y.0
+                    pattern = r'dec\.2\.2\.layers\.([01])\.adapter\.experts\.([0-3])\.0'
+                    if re.search(pattern, line):
+                        should_filter = True
+                    if not should_filter:
+                        filtered_lines.append(line)
+            # 只打印过滤后的输出
+            if filtered_lines:
+                print('\n'.join(filtered_lines), file=old_stderr, end='')
+    
+    # 使用上下文管理器来过滤输出
+    with filter_excluded_params():
+        model.load_state_dict(filtered_state_dict, strict=False)
+
+
+def _extract_net_name(ckpt_path, net_path=None):
+    """从 checkpoint 路径或网络路径中提取网络名称"""
+    # 首先尝试从 checkpoint 路径中提取（格式：.../MoCE_IR_S-2026_02_01_00_28_26/...）
+    try:
+        ckpt_path_obj = pathlib.Path(ckpt_path)
+        # 向上查找包含模型名的目录
+        for parent in ckpt_path_obj.parents:
+            parent_name = parent.name
+            # 检查是否是实验目录格式（模型名-时间戳）
+            if "-" in parent_name and len(parent_name.split("-")) >= 2:
+                parts = parent_name.split("-")
+                # 尝试找到模型名（通常在第一部分或前几部分）
+                if len(parts) >= 2:
+                    # 检查是否是日期格式（YYYY_MM_DD）
+                    if len(parts[-1].split("_")) >= 3:
+                        # 提取模型名（去掉时间戳部分）
+                        net_name = "-".join(parts[:-1])
+                        return net_name
+        
+        # 如果没找到，尝试从 net_path 中提取
+        if net_path:
+            net_path_obj = pathlib.Path(net_path)
+            net_file = net_path_obj.name
+            if net_file.endswith(".py"):
+                net_name = net_file[:-3]  # 去掉 .py 后缀
+                return net_name
+    except Exception as e:
+        print(f"[Warn] Failed to extract net_name: {e}")
+    
+    return "Unknown"
+
+
+@contextlib.contextmanager
+def _suppress_fvcore_output():
+    """抑制 fvcore 的输出（Unsupported operator 和未使用的子模块信息）"""
+    old_stderr = sys.stderr
+    old_stdout = sys.stdout
+    
+    # 创建自定义的流来过滤输出
+    class FilteredStream:
+        def __init__(self, original_stream):
+            self.original_stream = original_stream
+            self.suppress_mode = False  # 是否处于抑制模式（遇到特定消息后）
+        
+        def write(self, text):
+            if not text:
+                return
+            
+            text_lower = text.lower()
+            line = text.strip()
+            
+            # 过滤 "Unsupported operator" 消息（包括 "encountered X time(s)" 格式）
+            if 'unsupported operator' in text_lower:
+                return
+            if 'encountered' in text_lower and 'time(s)' in text_lower:
+                return
+            
+            # 过滤 "The following submodules" 消息
+            if 'the following submodules' in text_lower or 'never called during the trace' in text_lower:
+                self.suppress_mode = True
+                return
+            
+            # 如果处于抑制模式
+            if self.suppress_mode:
+                # 检查是否包含子模块名称（dec. 或 enc. 开头，且包含 adapter.experts）
+                # 处理可能在同一行用逗号分隔的多个模块名称
+                if line:
+                    # 检查是否包含 adapter.experts 的子模块
+                    if 'adapter.experts' in line and (line.startswith('dec.') or line.startswith('enc.') or 'dec.' in line or 'enc.' in line):
+                        return
+                    # 如果是不包含 adapter.experts 的子模块名称，可能是其他重要信息
+                    if (line.startswith('dec.') or line.startswith('enc.')) and 'adapter.experts' not in line:
+                        # 停止抑制，让这一行通过
+                        self.suppress_mode = False
+                        self.original_stream.write(text)
+                        return
+                    # 如果是不以 dec. 或 enc. 开头的非空行，可能是新段落，停止抑制
+                    if not (line.startswith('dec.') or line.startswith('enc.') or 'dec.' in line or 'enc.' in line):
+                        # 检查是否包含明显的段落分隔符或新主题
+                        if len(line) > 0 and not any(keyword in text_lower for keyword in ['adapter', 'experts', 'layers']):
+                            self.suppress_mode = False
+                            self.original_stream.write(text)
+                            return
+                # 空行继续抑制（可能是列表中的分隔）
+                return
+            
+            # 其他输出正常显示
+            self.original_stream.write(text)
+        
+        def flush(self):
+            self.original_stream.flush()
+    
+    filtered_stderr = FilteredStream(old_stderr)
+    filtered_stdout = FilteredStream(old_stdout)
+    
+    try:
+        sys.stderr = filtered_stderr
+        sys.stdout = filtered_stdout
+        yield
+    finally:
+        sys.stderr = old_stderr
+        sys.stdout = old_stdout
+
+
+def _calculate_model_complexity(net, input_size=(1, 3, 256, 256)):
+    """计算模型的 GFLOPs 和参数量（百万）"""
+    try:
+        net.eval()
+        try:
+            device = next(net.parameters()).device
+            dtype = next(net.parameters()).dtype
+        except StopIteration:
+            return None, None
+        
+        # 计算参数量（百万）
+        try:
+            num_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+            num_params_m = num_params / 1e6
+        except Exception:
+            num_params_m = None
+        
+        # 计算 GFLOPs
+        gflops = None
+        if FVCORE_AVAILABLE:
+            try:
+                with torch.no_grad(), _suppress_fvcore_output():
+                    dummy_input = torch.randn(*input_size, device=device, dtype=dtype)
+                    flops = FlopCountAnalysis(net, dummy_input)
+                    total_flops = flops.total()
+                    gflops = total_flops / 1e9
+            except Exception:
+                pass
+        
+        if gflops is None and MODEL_SUMMARY_AVAILABLE:
+            try:
+                with torch.no_grad(), _suppress_fvcore_output():
+                    flops, params = get_params_flops(net, input_dim=input_size[1:])
+                    gflops = flops
+            except Exception:
+                pass
+        
+        return gflops, num_params_m
+    except Exception:
+        return None, None
 
 
 def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torch.device) -> dict:
@@ -274,7 +509,8 @@ def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torc
     ssim_vals = []
     lpips_vals = []
     with torch.no_grad():
-        for ([clean_name, de_id], degrad_patch, clean_patch) in tqdm(data_loader, leave=False):
+        # 禁用进度条避免刷屏
+        for ([clean_name, de_id], degrad_patch, clean_patch) in data_loader:
             degrad_patch = degrad_patch.to(device, non_blocking=True)
             clean_patch = clean_patch.to(device, non_blocking=True)
             de_id = _normalize_de_id(de_id, device=device)
@@ -307,14 +543,30 @@ def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torc
 
 
 def main(opt):
-    print("Options")
-    print(opt)
+    # 不打印完整Options，只保留关键信息
     run_id = os.environ.get("MOCEIRV2_RUN_ID")
     if run_id is None:
         timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+
+        # 基础模型名
         model_name = getattr(opt, "model", "model")
         model_name = str(model_name).replace(os.sep, "_").replace(" ", "_")
-        run_id = f"{model_name}-{timestamp}"
+
+        # 从数据路径或 trainset 推出“数据集名字”，插入到中间：
+        # e.g. MoCE_IR_S-CVC_8_1_1-2026_02_13_17_00_43
+        dataset_name = None
+        data_dir = getattr(opt, "data_file_dir", None)
+        if data_dir:
+            # 取数据根目录名作为数据集名
+            dataset_name = os.path.basename(str(data_dir).rstrip(os.sep))
+
+        if not dataset_name:
+            # 回退到 TRAINSET 字段，避免出现空字符串
+            dataset_name = str(getattr(opt, "trainset", "")).strip() or "data"
+
+        dataset_name = dataset_name.replace(os.sep, "_").replace(" ", "_")
+
+        run_id = f"{model_name}-{dataset_name}-{timestamp}"
         os.environ["MOCEIRV2_RUN_ID"] = run_id
 
     time_stamp = run_id
@@ -392,6 +644,27 @@ def main(opt):
         if accelerator.is_main_process:
             print(f"[Fine-tune] Resolved fine_tune_from '{ckpt_spec}' to: {ckpt_path}")
         _load_weights(model, ckpt_path)
+
+    # 计算并显示模型复杂度（只在主进程）
+    if accelerator.is_main_process:
+        model_name = getattr(opt, "model", "model")
+        # 将模型移到设备上以便计算复杂度
+        temp_device = accelerator.device
+        temp_model = accelerator.unwrap_model(model)
+        gflops, params_m = _calculate_model_complexity(temp_model, input_size=(1, 3, 256, 256))
+        
+        print(f"\n{'='*60}")
+        print(f"Model: {model_name}")
+        if gflops is not None:
+            print(f"GFLOPs: {gflops:.2f}")
+        else:
+            print(f"GFLOPs: N/A")
+        if params_m is not None:
+            print(f"Parameters: {params_m:.2f}M")
+        else:
+            print(f"Parameters: N/A")
+        print(f"Experiment Dir: {log_dir}")
+        print(f"{'='*60}\n")
 
     if getattr(opt, "print_model", False) and accelerator.is_main_process:
         print(model)
@@ -476,6 +749,8 @@ def main(opt):
     if "CDD11" not in opt.trainset:
         val_opt = deepcopy(opt)
         val_opt.benchmarks = ["gopro"]
+        # 验证集显式使用 val split，避免使用 test 数据做验证
+        setattr(val_opt, "split", "val")
         valset = IRBenchmarks(val_opt)
         val_loader = DataLoader(
             valset,
@@ -546,8 +821,6 @@ def main(opt):
     log_every_n_steps = int(getattr(opt, "log_every_n_steps", 50))
 
     for epoch in range(start_epoch, max_epochs):
-        if accelerator.is_main_process:
-            print(f"[Train] Epoch {int(epoch) + 1}/{int(max_epochs)}")
         model.train()
         raw_model = accelerator.unwrap_model(model)
         if hasattr(trainloader, "sampler") and hasattr(trainloader.sampler, "set_epoch"):
@@ -561,10 +834,12 @@ def main(opt):
         de_aux_sum = torch.zeros((), device=accelerator.device) if de_aux_enabled else None
         step_count = torch.zeros((), device=accelerator.device)
 
+        # 启用训练进度条，只在主进程显示，完成后自动清除
         pbar = tqdm(
             trainloader,
             disable=not accelerator.is_main_process,
             desc=f"Epoch {int(epoch) + 1}/{int(max_epochs)}",
+            leave=False,  # epoch结束后自动清除进度条
         )
         for batch in pbar:
             ([clean_name, de_id], degrad_patch, clean_patch) = batch
@@ -611,7 +886,16 @@ def main(opt):
             global_step += 1
 
             if accelerator.is_main_process:
-                pbar.set_postfix(loss=float(loss_det))
+                # 更新进度条显示当前loss
+                current_loss = float(loss_det.cpu().item())
+                current_balance = float(balance_det.cpu().item())
+                pbar.set_postfix({
+                    'loss': f'{current_loss:.6f}',
+                    'balance': f'{current_balance:.6f}',
+                    'lr': f'{optimizer.param_groups[0]["lr"]:.2e}'
+                })
+                
+                # 只记录到tensorboard/wandb，不打印到控制台
                 if writer is not None and (global_step % log_every_n_steps == 0):
                     writer.add_scalar("Train_Loss", float(loss_det), global_step)
                     writer.add_scalar("Balance", float(balance_det), global_step)
@@ -637,6 +921,10 @@ def main(opt):
         de_aux_epoch = None
         if de_aux_enabled and de_aux_sum is not None:
             de_aux_epoch = (accelerator.reduce(de_aux_sum, reduction="sum") / accelerator.reduce(step_count, reduction="sum")).detach().float().cpu().item()
+
+        # 每个epoch只显示一条训练日志
+        if accelerator.is_main_process:
+            print(f"[Train] Epoch {int(epoch) + 1}/{int(max_epochs)} | Loss: {loss_epoch:.6f} | Balance: {balance_epoch:.6f} | LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         if accelerator.is_main_process:
             if writer is not None:
@@ -701,8 +989,12 @@ def main(opt):
                     "lr": float(optimizer.param_groups[0]["lr"]),
                 })
 
+                # 打印val结果，不刷新（使用end=''和flush=True）
                 psnr_val = val_metrics.get("psnr")
                 ssim_val = val_metrics.get("ssim")
+                lpips_val = val_metrics.get("lpips")
+                print(f"[Val] Epoch {int(epoch) + 1}/{int(max_epochs)} | PSNR: {psnr_val:.4f} | SSIM: {ssim_val:.4f} | LPIPS: {lpips_val:.4f}", flush=True)
+
                 if psnr_val is not None:
                     if best_val_psnr is None or float(psnr_val) > float(best_val_psnr):
                         best_val_psnr = float(psnr_val)
@@ -743,6 +1035,8 @@ def main(opt):
         if accelerator.is_main_process:
             test_opt = deepcopy(opt)
             test_opt.benchmarks = ["gopro"]
+            # 测试集显式使用 test split
+            setattr(test_opt, "split", "test")
             testset = IRBenchmarks(test_opt)
             test_loader = DataLoader(
                 testset,
@@ -789,6 +1083,117 @@ def main(opt):
                 "test_lpips": test_metrics.get("lpips"),
                 "lr": float(optimizer.param_groups[0]["lr"]),
             })
+            
+            # 打印test结果，不刷新
+            psnr_test = test_metrics.get("psnr")
+            ssim_test = test_metrics.get("ssim")
+            lpips_test = test_metrics.get("lpips")
+            print(f"[Test] Final | PSNR: {psnr_test:.4f} | SSIM: {ssim_test:.4f} | LPIPS: {lpips_test:.4f}", flush=True)
+            
+            # 保存结果到 test 目录的 test.csv
+            try:
+                # 找到最佳 checkpoint
+                best_ckpt = None
+                best_ckpt_path = None
+                if checkpoint_path.exists():
+                    # 优先选择 best_psnr_ssim
+                    best_psnr_ssim_ckpts = list(checkpoint_path.glob("best_psnr_ssim*.ckpt"))
+                    if best_psnr_ssim_ckpts:
+                        best_ckpt = sorted(best_psnr_ssim_ckpts, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                    else:
+                        # 如果没有 best_psnr_ssim，选择 best_psnr
+                        best_psnr_ckpts = list(checkpoint_path.glob("best_psnr*.ckpt"))
+                        if best_psnr_ckpts:
+                            best_ckpt = sorted(best_psnr_ckpts, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                    if best_ckpt:
+                        best_ckpt_path = best_ckpt
+                
+                if best_ckpt_path is None:
+                    # 如果没有找到最佳 checkpoint，使用 last.ckpt
+                    last_ckpt = checkpoint_path / "last.ckpt"
+                    if last_ckpt.exists():
+                        best_ckpt_path = last_ckpt
+                
+                if best_ckpt_path and best_ckpt_path.exists():
+                    # 获取 test_dir 配置
+                    result_root = os.environ.get("MOCEIR_TEST_RESULT_DIR", None)
+                    if result_root is None:
+                        result_root = getattr(opt, "test_dir", "test")
+                    result_root_path = pathlib.Path(str(result_root)).expanduser()
+                    if not result_root_path.is_absolute():
+                        project_dir = pathlib.Path(__file__).resolve().parent
+                        result_root_path = (project_dir / result_root_path).resolve()
+                    result_root_path.mkdir(parents=True, exist_ok=True)
+                    
+                    # 获取网络名称和数据集名称
+                    net_name = getattr(opt, "model", "model")
+                    net_name = str(net_name).replace(os.sep, "_").replace(" ", "_")
+                    
+                    dataset_name = None
+                    data_dir = getattr(opt, "data_file_dir", None)
+                    if data_dir:
+                        dataset_name = os.path.basename(str(data_dir).rstrip(os.sep))
+                    if not dataset_name:
+                        dataset_name = str(getattr(opt, "trainset", "")).strip() or "data"
+                    dataset_name = dataset_name.replace(os.sep, "_").replace(" ", "_")
+                    
+                    # 获取网络文件路径
+                    net_path = None
+                    try:
+                        net_snapshot_dir = log_dir / "net_snapshot"
+                        if net_snapshot_dir.exists():
+                            net_files = list(net_snapshot_dir.glob("*.py"))
+                            if net_files:
+                                net_path = str(net_files[0].resolve())
+                    except Exception:
+                        pass
+                    
+                    # 计算模型复杂度（如果还没有计算）
+                    gflops = None
+                    parameters = None
+                    try:
+                        gflops, parameters = _calculate_model_complexity(eval_net, input_size=(1, 3, 256, 256))
+                    except Exception:
+                        pass
+                    
+                    # 保存到 test.csv
+                    csv_path = result_root_path / "test.csv"
+                    csv_exists = csv_path.exists()
+                    fieldnames = [
+                        "net_name",
+                        "dataset",
+                        "gflops",
+                        "parameters",
+                        "benchmark",
+                        "psnr",
+                        "ssim",
+                        "lpips",
+                        "count",
+                        "ckpt_path",
+                        "net_path",
+                    ]
+                    with open(str(csv_path), "a", newline="", encoding="utf-8") as f:
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        if not csv_exists:
+                            writer.writeheader()
+                        writer.writerow({
+                            "net_name": net_name,
+                            "dataset": dataset_name,
+                            "gflops": f"{gflops:.4f}" if gflops is not None else "",
+                            "parameters": f"{parameters:.4f}" if parameters is not None else "",
+                            "benchmark": "gopro",
+                            "psnr": psnr_test if psnr_test is not None else "",
+                            "ssim": ssim_test if ssim_test is not None else "",
+                            "lpips": lpips_test if lpips_test is not None else "",
+                            "count": test_metrics.get("count", ""),
+                            "ckpt_path": str(best_ckpt_path.resolve()),
+                            "net_path": net_path if net_path else "",
+                        })
+                    print(f"[Test] Results saved to: {csv_path}", flush=True)
+            except Exception as e:
+                print(f"[Test] Warning: Failed to save results to test.csv: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
         accelerator.wait_for_everyone()
 
     accelerator.wait_for_everyone()

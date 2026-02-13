@@ -5,7 +5,27 @@ if [ -z "${MOCEIRV2_RUN_ID:-}" ]; then
   MODEL_NAME=$(python -c 'import config; print(str(getattr(config, "MODEL", "model")))' 2>/dev/null || echo "model")
   MODEL_NAME=${MODEL_NAME//\//_}
   MODEL_NAME=${MODEL_NAME// /_}
-  RUN_ID="${MODEL_NAME}-$(date +%Y_%m_%d_%H_%M_%S)"
+
+  # 从 DATA_FILE_DIR 或 TRAINSET 推断数据集名称，插入到 experiment 目录名中
+  DATASET_NAME=$(python - "$@" << 'PY' 2>/dev/null || echo "data"
+import os
+import config
+
+dataset_name = None
+data_dir = getattr(config, "DATA_FILE_DIR", None)
+if data_dir:
+    dataset_name = os.path.basename(str(data_dir).rstrip(os.sep))
+
+if not dataset_name:
+    dataset_name = str(getattr(config, "TRAINSET", "")).strip() or "data"
+
+dataset_name = dataset_name.replace(os.sep, "_").replace(" ", "_")
+print(dataset_name)
+PY
+)
+
+  # 形如: MoCE_IR_S-CVC_8_1_1_2026_02_13_17_00_43
+  RUN_ID="${MODEL_NAME}-${DATASET_NAME}_$(date +%Y_%m_%d_%H_%M_%S)"
   export MOCEIRV2_RUN_ID="$RUN_ID"
 else
   RUN_ID="$MOCEIRV2_RUN_ID"

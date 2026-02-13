@@ -674,6 +674,8 @@ def main(opt):
         for de in opt.benchmarks:
             ind_opt = opt
             ind_opt.benchmarks = [de]
+            # 独立测试脚本统一使用 test split
+            setattr(ind_opt, "split", "test")
             
             if de == "drmi":
                 dataset = DRMITestDataset(ind_opt)
@@ -711,9 +713,18 @@ def main(opt):
                 net_abs = str(pathlib.Path(str(getattr(module, "__file__", ""))).resolve())
             except Exception:
                 net_abs = str(getattr(module, "__file__", ""))
-
+            
             # 提取网络名称
             net_name = _extract_net_name(ckpt_abs, net_abs)
+
+            # 提取数据集名称：优先从 data_file_dir 取最后一级目录名，否则用 trainset
+            dataset_name = None
+            data_dir = getattr(opt, "data_file_dir", None)
+            if data_dir:
+                dataset_name = os.path.basename(str(data_dir).rstrip(os.sep))
+            if not dataset_name:
+                dataset_name = str(getattr(opt, "trainset", "")).strip()
+            dataset_name = dataset_name or ""
 
             ckpt_str = str(ckpt_path)
             ckpt_name = ckpt_path.stem
@@ -724,6 +735,7 @@ def main(opt):
 
             payload = {
                 "net_name": net_name,
+                "dataset": dataset_name,
                 "gflops": gflops,
                 "parameters": parameters,
                 "ckpt_path": ckpt_str,
@@ -748,9 +760,10 @@ def main(opt):
 
             csv_path = result_root_path / "test.csv"
             csv_exists = csv_path.exists()
-            # 新的列顺序：net_name, gflops, parameters, benchmark, psnr, ssim, lpips, count, ckpt_path, net_path
+            # 新的列顺序：net_name, dataset, gflops, parameters, benchmark, psnr, ssim, lpips, count, ckpt_path, net_path
             fieldnames = [
                 "net_name",
+                "dataset",
                 "gflops",
                 "parameters",
                 "benchmark",
@@ -769,6 +782,7 @@ def main(opt):
                     writer.writerow(
                         {
                             "net_name": net_name,
+                            "dataset": dataset_name,
                             "gflops": f"{gflops:.4f}" if gflops is not None else "",
                             "parameters": f"{parameters:.4f}" if parameters is not None else "",
                             "benchmark": row.get("benchmark", ""),
@@ -807,6 +821,7 @@ def main(opt):
                 exp_csv_exists = exp_csv_path.exists()
                 fieldnames = [
                     "net_name",
+                    "dataset",
                     "gflops",
                     "parameters",
                     "benchmark",
@@ -825,6 +840,7 @@ def main(opt):
                         writer.writerow(
                             {
                                 "net_name": net_name,
+                                "dataset": dataset_name,
                                 "gflops": f"{gflops:.4f}" if gflops is not None else "",
                                 "parameters": f"{parameters:.4f}" if parameters is not None else "",
                                 "benchmark": row.get("benchmark", ""),

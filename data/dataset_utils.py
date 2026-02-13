@@ -12,6 +12,11 @@ from data.degradation_utils import Degradation
 from utils.image_utils import random_augmentation, crop_img
 
 
+def _is_main_process():
+    """检查是否是主进程（rank 0）"""
+    return str(os.environ.get("RANK", "0")) == "0"
+
+
 class CDD11(Dataset):
     def __init__(self, args, split: str = "train", subset: str = "all"):
         super(CDD11, self).__init__()
@@ -114,8 +119,9 @@ class CDD11(Dataset):
                 if folder_name == self.subset:
                     filtered_folders.append(folder)
 
-        print(f"Degradation type mode: {self.subset}")
-        print(f"Loading degradation folders: {[os.path.basename(f.strip('/')) for f in filtered_folders]}")
+        if _is_main_process():
+            print(f"Degradation type mode: {self.subset}")
+            print(f"Loading degradation folders: {[os.path.basename(f.strip('/')) for f in filtered_folders]}")
         return filtered_folders
 
     def _crop_patch(self, img_1, img_2):
@@ -242,7 +248,6 @@ class AIOTrainDataset(Dataset):
             self.lr += self.dehaze_lr 
             self.hr += self.dehaze_hr
 
-        print(len(self.lr))
    
             
     def _init_synllie(self, id):
@@ -253,9 +258,8 @@ class AIOTrainDataset(Dataset):
         self.synllie_hr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(targets + "/*.png"))]
         
         self.synllie_counter = 0
-        print("Total SynLLIE training pairs : {}".format(len(self.synllie_lr)))
-        # Removed artificial repetition multiplier (*20) for faster epoch completion
-        print("Dataset length : {}".format(len(self.synllie_hr)))
+        if _is_main_process():
+            print("SynLLIE training pairs: {}".format(len(self.synllie_lr)))
     
     def _init_deblur(self, id):
         """Initialize the deblur training dataset.
@@ -277,26 +281,20 @@ class AIOTrainDataset(Dataset):
         if os.path.exists(metalens_inputs) and os.path.exists(metalens_targets):
             self.deblur_lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_inputs, "*.png")))]
             self.deblur_hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_targets, "*.png")))]
-            print("Using Metalens_0622 dataset structure")
-
         elif os.path.exists(generic_inputs) and os.path.exists(generic_targets):
             # 直接使用 <root>/train/lr 与 <root>/train/gt
             self.deblur_lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_inputs, "*.png")))]
             self.deblur_hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_targets, "*.png")))]
-            print("Using generic train/lr & train/gt dataset structure")
-
         else:
             # 3) 回退到 GoPro 数据集结构
             inputs = os.path.join(self.args.data_file_dir, "deblurring", "GoPro", "crop", "train", "input_crops")
             targets = os.path.join(self.args.data_file_dir, "deblurring", "GoPro", "crop", "train", "target_crops")
             self.deblur_lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(inputs, "*.png")))]
             self.deblur_hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(targets, "*.png")))]
-            print("Using GoPro dataset structure")
 
         self.deblur_counter = 0
-        print("Total Deblur training pairs : {}".format(len(self.deblur_hr)))
-        # Removed artificial repetition multiplier (*5) for faster epoch completion
-        print("Dataset length : {}".format(len(self.deblur_hr)))
+        if _is_main_process():
+            print("Deblur training pairs: {}".format(len(self.deblur_hr)))
         
     def _init_derain(self, id):
         inputs = self.args.data_file_dir + "/deraining/RainTrainL/rainy"
@@ -306,9 +304,8 @@ class AIOTrainDataset(Dataset):
         self.derain_hr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(targets + "/*.png"))]
         
         self.derain_counter = 0
-        print("Total Derain training pairs : {}".format(len(self.derain_lr)))
-        # Removed artificial repetition multiplier (*120) for faster epoch completion
-        print("Dataset length : {}".format(len(self.derain_hr)))
+        if _is_main_process():
+            print("Derain training pairs: {}".format(len(self.derain_lr)))
         
     def _init_dehaze(self, id):
         inputs = self.args.data_file_dir + "/dehazing/RESIDE/"
@@ -321,10 +318,8 @@ class AIOTrainDataset(Dataset):
         self.dehaze_hr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(targets + "/*.jpg"))]
         
         self.dehaze_counter = 0
-        print("Total Dehaze training pairs : {}".format(len(self.dehaze_lr)))
-        self.dehaze_lr = self.dehaze_lr
-        self.dehaze_hr = self.dehaze_hr
-        print("Repeated Dataset length : {}".format(len(self.dehaze_lr)))
+        if _is_main_process():
+            print("Dehaze training pairs: {}".format(len(self.dehaze_lr)))
         
     def _init_clean(self, id):
         inputs = self.args.data_file_dir + "/denoising"
@@ -354,7 +349,8 @@ class AIOTrainDataset(Dataset):
             self.s50_counter = 0
 
         self.num_clean = len(clean)
-        print("Total Denoise Ids : {}".format(self.num_clean))
+        if _is_main_process():
+            print("Denoise training pairs: {}".format(self.num_clean))
 
     def _crop_patch(self, img_1, img_2):
         H = img_1.shape[0]
@@ -489,37 +485,38 @@ class IRBenchmarks(Dataset):
 
         优先级：
         1) Metalens_0622 结构:  <data_file_dir>/Metalens_0622/test/meta, ground_truth
-        2) 通用结构:            <data_file_dir>/test/lr, gt   （例如 open_dataset_8_1_1）
+        2) 通用结构:            <data_file_dir>/{split}/lr, gt   （例如 open_dataset_8_1_1，split可以是val或test）
         3) GoPro 结构:          <data_file_dir>/deblurring/{benchmark}/test/input, target
         """
+        # 获取split参数，默认为test
+        split = getattr(self.args, "split", "test")
 
         # 1) Metalens_0622
         metalens_inputs = os.path.join(self.args.data_file_dir, "Metalens_0622", "test", "meta")
         metalens_targets = os.path.join(self.args.data_file_dir, "Metalens_0622", "test", "ground_truth")
 
-        # 2) 通用 test/lr, test/gt 结构
-        generic_inputs = os.path.join(self.args.data_file_dir, "test", "lr")
-        generic_targets = os.path.join(self.args.data_file_dir, "test", "gt")
+        # 2) 通用 {split}/lr, {split}/gt 结构（支持val和test）
+        generic_inputs = os.path.join(self.args.data_file_dir, split, "lr")
+        generic_targets = os.path.join(self.args.data_file_dir, split, "gt")
 
         if os.path.exists(metalens_inputs) and os.path.exists(metalens_targets):
             self.lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_inputs, "*.png")))]
             self.hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_targets, "*.png")))]
-            print("Using Metalens_0622 test dataset structure")
+            if _is_main_process():
+                print("Using Metalens_0622 test dataset structure")
 
         elif os.path.exists(generic_inputs) and os.path.exists(generic_targets):
             self.lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_inputs, "*.png")))]
             self.hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_targets, "*.png")))]
-            print("Using generic test/lr & test/gt dataset structure")
-
         else:
             # 3) 回退到 GoPro 数据集结构
             inputs = os.path.join(self.args.data_file_dir, "deblurring", benchmark, "test", "input")
             targets = os.path.join(self.args.data_file_dir, "deblurring", benchmark, "test", "target")
             self.lr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(inputs, "*.png")))]
             self.hr = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(targets, "*.png")))]
-            print("Using GoPro test dataset structure")
 
-        print("Total Deblur testing pairs : {}".format(len(self.hr)))
+        if _is_main_process():
+            print("Deblur testing pairs: {}".format(len(self.hr)))
         
     ####################################################################################################
     ## LLIE DATASET        
@@ -529,7 +526,8 @@ class IRBenchmarks(Dataset):
         
         self.lr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(inputs + "/*.png"))]
         self.hr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(targets + "/*.png"))]
-        print("Total LLIE testing pairs : {}".format(len(self.hr)))
+        if _is_main_process():
+            print("LLIE testing pairs: {}".format(len(self.hr)))
             
     ####################################################################################################
     ## DERAINING DATASET
@@ -540,7 +538,8 @@ class IRBenchmarks(Dataset):
         self.lr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(inputs + "/*.png"))]
         self.hr = [{"img" : x, "de_type":id} for x in sorted(glob.glob(targets + "/*.png"))]
         
-        print("Total Derain testing pairs : {}".format(len(self.hr)))
+        if _is_main_process():
+            print("Derain testing pairs: {}".format(len(self.hr)))
         
     ####################################################################################################
     ## DEHAZING DATASET
@@ -555,7 +554,8 @@ class IRBenchmarks(Dataset):
             hazy_name = sample["img"]
             clean_name = self._get_nonhazy_name(hazy_name)
             self.hr.append({"img" : clean_name, "de_type":id})
-        print("Total Dehazing testing pairs : {}".format(len(self.hr)))
+        if _is_main_process():
+            print("Dehazing testing pairs: {}".format(len(self.hr)))
         
     ####################################################################################################
     ## DENOISING DATASET
@@ -566,4 +566,5 @@ class IRBenchmarks(Dataset):
         
         self.lr = [{"img" : x, "de_type":id} for x in clean]
         self.hr = [{"img" : x, "de_type":id} for x in clean]
-        print("Total Denoise testing pairs : {}".format(len(self.lr)))
+        if _is_main_process():
+            print("Denoise testing pairs: {}".format(len(self.lr)))
