@@ -145,6 +145,29 @@
    - **自动测试**：每个模型训练完成后**自动测试**，无需手动运行测试脚本
    - **结果追踪**：`test/test.csv` 中会记录每个模型对应的数据集名称，便于后续分析和对比
 
+## 数据集准备
+
+### 从魔塔社区（ModelScope）下载数据集
+
+本项目支持从魔塔社区（ModelScope）下载数据集。按照以下步骤操作：
+
+1. **安装 ModelScope**：
+   ```bash
+   pip install modelscope
+   ```
+
+2. **登录 ModelScope**（使用提供的 token）：
+   ```bash
+   modelscope login --token ms-8f83a86e-1a85-400c-90d8-2d0682d859d9
+   ```
+
+3. **下载数据集**：
+   ```bash
+   modelscope download --dataset quincy123123/ronghe
+   ```
+
+下载完成后，数据集会保存在 ModelScope 的默认缓存目录中。你可以在 `config.py` 中配置 `DATA_FILE_DIR` 或 `DATA_FILE_DIRS` 指向下载的数据集路径。
+
 ### 推荐使用流程
 
 1. **配置环境**：修改 `config.py`，确定模型、数据路径和训练的超参。
