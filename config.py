@@ -6,7 +6,7 @@ import pathlib
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
 MODEL = "MoCE_IR_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"或者 MoCE_IR_PhysRouting 或 "MoCE_IR_Spectral"
-EPOCHS = 3
+EPOCHS = 250
 BATCH_SIZE = 32  # 每个GPU的batch size 20
 VAL_EVERY_N_EPOCH = 20  # 每多少个epoch做一次验证
 LR = 2e-4
@@ -15,9 +15,9 @@ LR = 2e-4
 
 # 路径设置 - 支持多个数据集同时训练
 DATA_FILE_DIRS = [
-    "../../data/open_dataset_8_1_1_mini",
-    "../../data/open_dataset_8_1_1_mini2",
-    "../../data/open_dataset_8_1_1_mini3"
+    "../../data/Endovis17_8_1_1",
+    "../../data/Kvasir_SEG_8_1_1",
+    "../../data/CVC_8_1_1"
 ]
 
 # experiment 根目录：训练产生的所有实验目录（checkpoints、metrics等）  

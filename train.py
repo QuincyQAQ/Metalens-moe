@@ -299,14 +299,17 @@ def _copy_experiment_to_test_and_merge_csv(log_dir: pathlib.Path, project_dir: p
             pass
     
     # 如果是多数据集训练，使用父目录；否则使用log_dir本身
+    is_using_parent = False
     if is_multi_dataset:
         experiment_root = parent_dir
         experiment_test_csv = parent_test_csv
+        is_using_parent = True
         print(f"[Post-Train] Multi-dataset training detected, using parent directory: {parent_dir}", flush=True)
     elif not experiment_test_csv.exists() and parent_test_csv.exists():
         # 如果当前目录下没有test/test.csv，但父目录有，使用父目录
         experiment_root = parent_dir
         experiment_test_csv = parent_test_csv
+        is_using_parent = True
         print(f"[Post-Train] Found test.csv in parent directory: {parent_dir}", flush=True)
     
     # 复制整个实验目录到test文件夹下
@@ -331,6 +334,34 @@ def _copy_experiment_to_test_and_merge_csv(log_dir: pathlib.Path, project_dir: p
         import traceback
         traceback.print_exc()
         return
+    
+    # 如果是多数据集训练（使用了父目录），删除test目录下所有对应的子目录
+    if is_using_parent and log_dir != experiment_root:
+        # log_dir是子目录，需要删除test目录下对应的子目录
+        subdir_name = log_dir.name
+        target_subdir = test_dir / subdir_name
+        if target_subdir.exists() and target_subdir.is_dir():
+            print(f"[Post-Train] Removing subdirectory from test folder (multi-dataset training): {target_subdir}", flush=True)
+            try:
+                shutil.rmtree(target_subdir)
+                print(f"[Post-Train] Subdirectory removed successfully: {target_subdir}", flush=True)
+            except Exception as e:
+                print(f"[Post-Train] Warning: Failed to remove subdirectory {target_subdir}: {e}", flush=True)
+        
+        # 同时检查并删除父目录下其他子目录在test目录中的对应项
+        try:
+            parent_subdirs = [d for d in parent_dir.iterdir() if d.is_dir() and d.name != "test" and d != log_dir]
+            for subdir in parent_subdirs:
+                target_subdir = test_dir / subdir.name
+                if target_subdir.exists() and target_subdir.is_dir():
+                    print(f"[Post-Train] Removing other subdirectory from test folder: {target_subdir}", flush=True)
+                    try:
+                        shutil.rmtree(target_subdir)
+                        print(f"[Post-Train] Subdirectory removed successfully: {target_subdir}", flush=True)
+                    except Exception as e:
+                        print(f"[Post-Train] Warning: Failed to remove subdirectory {target_subdir}: {e}", flush=True)
+        except Exception as e:
+            print(f"[Post-Train] Warning: Error checking for other subdirectories: {e}", flush=True)
     
     # 检查test.csv是否存在
     if not experiment_test_csv.exists():
