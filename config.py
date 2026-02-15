@@ -6,7 +6,7 @@ import pathlib
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
 MODEL = "MoCE_IR_S"  # "MoCE_IR" 或 "MoCE_IR_S" 或 "ACFormer"或者 MoCE_IR_PhysRouting 或 "MoCE_IR_Spectral"
-EPOCHS = 1
+EPOCHS = 250
 BATCH_SIZE = 32  # 每个GPU的batch size 20
 VAL_EVERY_N_EPOCH = 20  # 每多少个epoch做一次验证
 LR = 2e-4
