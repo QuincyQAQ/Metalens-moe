@@ -642,7 +642,7 @@ class ModExpert(nn.Module):
             
         # PSF-Aware Prompt调制
         if use_psf_prompt:
-            self.psf_prompt = PSFAwarePrompt(rank, prompt_dim=rank//2)
+            self.psf_prompt = PSFAwarePrompt(freq_dim, prompt_dim=rank//2)
         
         # Dual Attention精修
         if use_dual_attn:
