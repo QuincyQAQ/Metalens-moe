@@ -15,9 +15,12 @@ LR = 2e-4
 
 # 路径设置 - 支持多个数据集同时训练
 DATA_FILE_DIRS = [
-    "../../data/open_dataset_8_1_1_mini",
-    "../../data/open_dataset_8_1_1_mini2",
-    "../../data/open_dataset_8_1_1_mini3"
+    "../../data/Endovis17_8_1_1",
+    "../../data/Kvasir_SEG_8_1_1",
+    "../../data/CVC_8_1_1"
+    # "../../data/open_dataset_8_1_1_mini",
+    # "../../data/open_dataset_8_1_1_mini2",
+    # "../../data/open_dataset_8_1_1_mini3"
 ]
 
 # experiment 根目录：训练产生的所有实验目录（checkpoints、metrics等）  
