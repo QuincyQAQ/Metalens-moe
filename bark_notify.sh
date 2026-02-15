@@ -214,7 +214,26 @@ bark_notify_on_exit() {
         if [ -f "$csv_path" ]; then
             echo "找到测试结果文件: $csv_path，发送详细通知..."
             local gpu_info=$(get_gpu_info)
-            bark_notify_test_results "$csv_path" "" "" "" "$gpu_info"
+            if ! bark_notify_test_results "$csv_path" "" "" "" "$gpu_info"; then
+                # 如果解析 CSV 失败，发送简单的错误通知
+                echo "解析 CSV 文件失败，发送错误通知..."
+                local end_time=$(date +%s)
+                local duration=$((end_time - SCRIPT_START_TIME))
+                local hours=$((duration / 3600))
+                local minutes=$(((duration % 3600) / 60))
+                local seconds=$((duration % 60))
+                local time_str=""
+                if [ $hours -gt 0 ]; then
+                    time_str="${hours}小时${minutes}分${seconds}秒"
+                elif [ $minutes -gt 0 ]; then
+                    time_str="${minutes}分${seconds}秒"
+                else
+                    time_str="${seconds}秒"
+                fi
+                bark_notify "❌出错" "训练完成，但解析测试结果文件失败
+文件路径: $csv_path
+运行时间: ${time_str}"
+            fi
         else
             # 如果没找到，发送简单的成功通知
             echo "未找到测试结果文件，发送简单通知..."
@@ -420,8 +439,26 @@ except Exception as e:
 EOF
 )
     
-    if [ $? -ne 0 ] || [ -z "$result" ]; then
+    local parse_exit_code=$?
+    if [ $parse_exit_code -ne 0 ] || [ -z "$result" ]; then
         echo "错误: 解析 CSV 文件失败"
+        # 尝试发送一个简单的错误通知
+        local end_time=$(date +%s)
+        local duration=$((end_time - SCRIPT_START_TIME))
+        local hours=$((duration / 3600))
+        local minutes=$(((duration % 3600) / 60))
+        local seconds=$((duration % 60))
+        local time_str=""
+        if [ $hours -gt 0 ]; then
+            time_str="${hours}小时${minutes}分${seconds}秒"
+        elif [ $minutes -gt 0 ]; then
+            time_str="${minutes}分${seconds}秒"
+        else
+            time_str="${seconds}秒"
+        fi
+        bark_notify "❌出错" "训练完成，但解析测试结果文件失败
+文件路径: $csv_file
+运行时间: ${time_str}"
         return 1
     fi
     

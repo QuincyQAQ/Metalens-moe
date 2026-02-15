@@ -782,18 +782,18 @@ class AdapterLayer(nn.Module):
                 out = (expert_stack * gates_expanded).sum(dim=1)
         else:
             # 原始路由逻辑
-        if self.training:
-            dispatcher = SparseDispatcher(self.num_experts, gates)
-            expert_inputs = dispatcher.dispatch(x)
-            expert_shared_intputs = dispatcher.dispatch(shared)
+            if self.training:
+                dispatcher = SparseDispatcher(self.num_experts, gates)
+                expert_inputs = dispatcher.dispatch(x)
+                expert_shared_intputs = dispatcher.dispatch(shared)
                 expert_outputs = [self.experts[exp](expert_inputs[exp], expert_shared_intputs[exp], freq_emb) 
                                  for exp in range(len(self.experts))]
                 
                 if self.use_mamba:
                     out = self.mamba_fusion(expert_outputs)
                 else:
-            out = dispatcher.combine(expert_outputs, multiply_by_gates=True)
-        else:
+                    out = dispatcher.combine(expert_outputs, multiply_by_gates=True)
+            else:
                 # 非训练模式：选择top-k专家并加权融合
                 # top_k_indices: [B, k], 每行是当前样本的top-k专家索引
                 # 简化处理：对每个样本，选择其top-k专家，然后加权融合
