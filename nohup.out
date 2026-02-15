@@ -1,0 +1,1098 @@
+Options
+ConfigNamespace(model='MoCE_IR_S', epochs=100, batch_size=32, lr=0.0002, de_type=['deblur'], trainset='standard', loss_type='L1', patch_size=128, balance_loss_weight=0.01, fft_loss_weight=1.0, num_workers=8, accum_grad=1, resume_from=None, fine_tune_from=None, checkpoint_id=None, benchmarks=None, save_results=True, deterministic=False, benchmark=True, precision='16-mixed', tf32=True, log_every_n_steps=10, prefetch_factor=4, persistent_workers=True, data_file_dir='/media/cxhlab/Data/lwx/dataset', output_path='output/', wblogger=False, ckpt_dir='checkpoints', num_gpus=2, dim=32, num_blocks=[4, 6, 6, 8], num_dec_blocks=[2, 4, 4], latent_dim=2, num_exp_blocks=4, num_refinement_blocks=4, heads=[1, 2, 4, 8], stage_depth=[1, 1, 1], with_complexity=False, complexity_scale='max', rank_type='spread', depth_type='constant', topk=1)
+PLTrainModel(
+  (net): MoCEIR(
+    (patch_embed): OverlapPatchEmbed(
+      (proj): Conv2d(3, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    )
+    (freq_embed): FrequencyEmbedding(
+      (high_conv): Sequential(
+        (0): HighPassConv2d(
+          (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256, bias=False)
+        )
+        (1): GELU(approximate='none')
+      )
+      (mlp): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+        (2): Linear(in_features=512, out_features=256, bias=True)
+      )
+    )
+    (enc): ModuleList(
+      (0): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+                (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(32, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+      (1): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-5): 6 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(64, 192, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=192)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256)
+                (project_out): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+      (2): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-5): 6 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(128, 384, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=384)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=512)
+                (project_out): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+    )
+    (latent): EncoderResidualGroup(
+      (layers): ModuleList(
+        (0-7): 8 x EncoderBlock(
+          (norms): ModuleList(
+            (0-1): 2 x LayerNorm(
+              (body): WithBias_LayerNorm()
+            )
+          )
+          (mixer): Attention(
+            (qkv): Conv2d(256, 768, kernel_size=(1, 1), stride=(1, 1))
+            (qkv_dwconv): Conv2d(768, 768, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=768)
+            (project_out): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (ffn): FeedForward(
+            (project_in): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1))
+            (dwconv): Conv2d(1024, 1024, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1024)
+            (project_out): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+      )
+    )
+    (dec): ModuleList(
+      (0): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(128, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=384, bias=False)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (kv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(256, 256, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=256, bias=False)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=512, bias=False)
+                (project_out): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64)
+                        (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+                        (kv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(256, 256, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=256)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=128, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+      (1): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(64, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=192, bias=False)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64, bias=False)
+                (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128, bias=False)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256, bias=False)
+                (project_out): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(8, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=8)
+                        (kv): Conv2d(8, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(16, 16, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=16)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64)
+                        (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=64, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+      (2): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-1): 2 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96, bias=False)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32, bias=False)
+                (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64, bias=False)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 4, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(4, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(4, 4, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(4, 4, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=4)
+                        (kv): Conv2d(4, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(8, 8, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=8)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(4, 4, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(8, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=8)
+                        (kv): Conv2d(8, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(16, 16, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=16)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=32, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+    (refinement): EncoderResidualGroup(
+      (layers): ModuleList(
+        (0-3): 4 x EncoderBlock(
+          (norms): ModuleList(
+            (0-1): 2 x LayerNorm(
+              (body): WithBias_LayerNorm()
+            )
+          )
+          (mixer): Attention(
+            (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1))
+            (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96)
+            (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (ffn): FeedForward(
+            (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1))
+            (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+            (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+      )
+    )
+    (output): Conv2d(32, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  )
+  (loss_fn): L1Loss()
+)Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+Initializing distributed: GLOBAL_RANK: 0, MEMBER: 1/2
+Options
+ConfigNamespace(model='MoCE_IR_S', epochs=100, batch_size=32, lr=0.0002, de_type=['deblur'], trainset='standard', loss_type='L1', patch_size=128, balance_loss_weight=0.01, fft_loss_weight=1.0, num_workers=8, accum_grad=1, resume_from=None, fine_tune_from=None, checkpoint_id=None, benchmarks=None, save_results=True, deterministic=False, benchmark=True, precision='16-mixed', tf32=True, log_every_n_steps=10, prefetch_factor=4, persistent_workers=True, data_file_dir='/media/cxhlab/Data/lwx/dataset', output_path='output/', wblogger=False, ckpt_dir='checkpoints', num_gpus=2, dim=32, num_blocks=[4, 6, 6, 8], num_dec_blocks=[2, 4, 4], latent_dim=2, num_exp_blocks=4, num_refinement_blocks=4, heads=[1, 2, 4, 8], stage_depth=[1, 1, 1], with_complexity=False, complexity_scale='max', rank_type='spread', depth_type='constant', topk=1)
+PLTrainModel(
+  (net): MoCEIR(
+    (patch_embed): OverlapPatchEmbed(
+      (proj): Conv2d(3, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    )
+    (freq_embed): FrequencyEmbedding(
+      (high_conv): Sequential(
+        (0): HighPassConv2d(
+          (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256, bias=False)
+        )
+        (1): GELU(approximate='none')
+      )
+      (mlp): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+        (2): Linear(in_features=512, out_features=256, bias=True)
+      )
+    )
+    (enc): ModuleList(
+      (0): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+                (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(32, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+      (1): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-5): 6 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(64, 192, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=192)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256)
+                (project_out): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+      (2): ModuleList(
+        (0): EncoderResidualGroup(
+          (layers): ModuleList(
+            (0-5): 6 x EncoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (mixer): Attention(
+                (qkv): Conv2d(128, 384, kernel_size=(1, 1), stride=(1, 1))
+                (qkv_dwconv): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=384)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1))
+                (dwconv): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=512)
+                (project_out): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+            )
+          )
+        )
+        (1): Downsample(
+          (body): Sequential(
+            (0): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelUnshuffle(downscale_factor=2)
+          )
+        )
+      )
+    )
+    (latent): EncoderResidualGroup(
+      (layers): ModuleList(
+        (0-7): 8 x EncoderBlock(
+          (norms): ModuleList(
+            (0-1): 2 x LayerNorm(
+              (body): WithBias_LayerNorm()
+            )
+          )
+          (mixer): Attention(
+            (qkv): Conv2d(256, 768, kernel_size=(1, 1), stride=(1, 1))
+            (qkv_dwconv): Conv2d(768, 768, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=768)
+            (project_out): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (ffn): FeedForward(
+            (project_in): Conv2d(256, 1024, kernel_size=(1, 1), stride=(1, 1))
+            (dwconv): Conv2d(1024, 1024, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1024)
+            (project_out): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+      )
+    )
+    (dec): ModuleList(
+      (0): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(128, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=384, bias=False)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (kv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(256, 256, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=256, bias=False)
+                (project_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(128, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=512, bias=False)
+                (project_out): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64)
+                        (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+                        (kv): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(256, 256, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=256)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=128, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+      (1): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-3): 4 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(64, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=192, bias=False)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64, bias=False)
+                (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128, bias=False)
+                (project_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=256, bias=False)
+                (project_out): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(8, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=8)
+                        (kv): Conv2d(8, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(16, 16, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=16)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=64)
+                        (kv): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(128, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=128)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=64, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+      (2): ModuleList(
+        (0): Upsample(
+          (body): Sequential(
+            (0): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (1): PixelShuffle(upscale_factor=2)
+          )
+        )
+        (1): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (2): DecoderResidualGroup(
+          (layers): ModuleList(
+            (0-1): 2 x DecoderBlock(
+              (norms): ModuleList(
+                (0-1): 2 x LayerNorm(
+                  (body): WithBias_LayerNorm()
+                )
+              )
+              (proj): ModuleList(
+                (0-1): 2 x Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+              )
+              (shared): Attention(
+                (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96, bias=False)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (mixer): CrossAttention(
+                (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32, bias=False)
+                (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64, bias=False)
+                (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (ffn): FeedForward(
+                (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128, bias=False)
+                (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              )
+              (adapter): AdapterLayer(
+                (experts): ModuleList(
+                  (0): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 4, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(4, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(4, 4, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(4, 4, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=4)
+                        (kv): Conv2d(4, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(8, 8, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=8)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(4, 4, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (1): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(8, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(8, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=8)
+                        (kv): Conv2d(8, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(16, 16, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=16)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(8, 8, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (2): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-1): 2 x Conv2d(32, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (2): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=16)
+                        (kv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(32, 32, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=32)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(16, 16, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                  (3): MySequential(
+                    (0): ModExpert(
+                      (proj): ModuleList(
+                        (0-2): 3 x Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                      )
+                      (body): FFTAttention(
+                        (q): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (q_dwconv): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=32)
+                        (kv): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                        (kv_dwconv): Conv2d(64, 64, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3), groups=64)
+                        (norm): LayerNorm(
+                          (body): WithBias_LayerNorm()
+                        )
+                        (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+                      )
+                    )
+                  )
+                )
+                (proj_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+                (routing): RoutingFunction(
+                  (gate): Sequential(
+                    (0): AdaptiveAvgPool2d(output_size=1)
+                    (1): Rearrange('b c 1 1 -> b c')
+                    (2): Linear(in_features=32, out_features=4, bias=False)
+                  )
+                  (freq_gate): Linear(in_features=256, out_features=4, bias=False)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+    (refinement): EncoderResidualGroup(
+      (layers): ModuleList(
+        (0-3): 4 x EncoderBlock(
+          (norms): ModuleList(
+            (0-1): 2 x LayerNorm(
+              (body): WithBias_LayerNorm()
+            )
+          )
+          (mixer): Attention(
+            (qkv): Conv2d(32, 96, kernel_size=(1, 1), stride=(1, 1))
+            (qkv_dwconv): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=96)
+            (project_out): Conv2d(32, 32, kernel_size=(1, 1), stride=(1, 1))
+          )
+          (ffn): FeedForward(
+            (project_in): Conv2d(32, 128, kernel_size=(1, 1), stride=(1, 1))
+            (dwconv): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=128)
+            (project_out): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+          )
+        )
+      )
+    )
+    (output): Conv2d(32, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  )
+  (loss_fn): L1Loss()
+)Initializing distributed: GLOBAL_RANK: 1, MEMBER: 2/2
+----------------------------------------------------------------------------------------------------
+distributed_backend=nccl
+All distributed processes registered. Starting with 2 processes
+----------------------------------------------------------------------------------------------------
+
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0,1]
+LOCAL_RANK: 1 - CUDA_VISIBLE_DEVICES: [0,1]
+/home/cxhlab/miniconda3/envs/moceir/lib/python3.10/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name    | Type   | Params | Mode  | FLOPs
+---------------------------------------------------
+0 | net     | MoCEIR | 11.5 M | train | 0    
+1 | loss_fn | L1Loss | 0      | train | 0    
+---------------------------------------------------
+11.5 M    Trainable params
+0         Non-trainable params
+11.5 M    Total params
+45.911    Total estimated model params size (MB)
+1337      Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+
+Using Metalens_0622 dataset structure
+Total Deblur training pairs : 628
+Dataset length : 628
+628
+Using GPU: 2 GPU(s) available
+
+Using Metalens_0622 dataset structure
+Total Deblur training pairs : 628
+Dataset length : 628
+628
+Using GPU: 2 GPU(s) available
+/home/cxhlab/miniconda3/envs/moceir/lib/python3.10/site-packages/lightning/pytorch/loops/fit_loop.py:317: The number of training batches (9) is smaller than the logging interval Trainer(log_every_n_steps=10). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
+Training: |          | 0/? [00:00<?, ?it/s]Training: |          | 0/? [00:00<?, ?it/s]Epoch 0:   0%|          | 0/9 [00:00<?, ?it/s]Epoch 0:  11%|█         | 1/9 [00:30<04:05,  0.03it/s]Epoch 0:  11%|█         | 1/9 [00:30<04:05,  0.03it/s, v_num=0, Train_Loss=0.178]Epoch 0:  22%|██▏       | 2/9 [00:33<01:57,  0.06it/s, v_num=0, Train_Loss=0.178]Epoch 0:  22%|██▏       | 2/9 [00:33<01:57,  0.06it/s, v_num=0, Train_Loss=0.160]Epoch 0:  33%|███▎      | 3/9 [00:35<01:11,  0.08it/s, v_num=0, Train_Loss=0.160]Epoch 0:  33%|███▎      | 3/9 [00:35<01:11,  0.08it/s, v_num=0, Train_Loss=0.167]Epoch 0:  44%|████▍     | 4/9 [00:38<00:47,  0.10it/s, v_num=0, Train_Loss=0.167]Epoch 0:  44%|████▍     | 4/9 [00:38<00:47,  0.10it/s, v_num=0, Train_Loss=0.173]Epoch 0:  56%|█████▌    | 5/9 [00:40<00:32,  0.12it/s, v_num=0, Train_Loss=0.173]Epoch 0:  56%|█████▌    | 5/9 [00:40<00:32,  0.12it/s, v_num=0, Train_Loss=0.152]Epoch 0:  67%|██████▋   | 6/9 [00:42<00:21,  0.14it/s, v_num=0, Train_Loss=0.152]Epoch 0:  67%|██████▋   | 6/9 [00:42<00:21,  0.14it/s, v_num=0, Train_Loss=0.172]Epoch 0:  78%|███████▊  | 7/9 [00:44<00:12,  0.16it/s, v_num=0, Train_Loss=0.172]Epoch 0:  78%|███████▊  | 7/9 [00:44<00:12,  0.16it/s, v_num=0, Train_Loss=0.173]Epoch 0:  89%|████████▉ | 8/9 [00:45<00:05,  0.17it/s, v_num=0, Train_Loss=0.173]Epoch 0:  89%|████████▉ | 8/9 [00:45<00:05,  0.17it/s, v_num=0, Train_Loss=0.165]Epoch 0: 100%|██████████| 9/9 [00:47<00:00,  0.19it/s, v_num=0, Train_Loss=0.165]Epoch 0: 100%|██████████| 9/9 [00:47<00:00,  0.19it/s, v_num=0, Train_Loss=0.159]Epoch 0: 100%|██████████| 9/9 [00:47<00:00,  0.19it/s, v_num=0, Train_Loss=0.159]Epoch 0:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.159]        Epoch 1:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.159]Epoch 1:  11%|█         | 1/9 [00:24<03:15,  0.04it/s, v_num=0, Train_Loss=0.159]Epoch 1:  11%|█         | 1/9 [00:24<03:15,  0.04it/s, v_num=0, Train_Loss=0.166]Epoch 1:  22%|██▏       | 2/9 [00:25<01:30,  0.08it/s, v_num=0, Train_Loss=0.166]Epoch 1:  22%|██▏       | 2/9 [00:25<01:30,  0.08it/s, v_num=0, Train_Loss=0.154]Epoch 1:  33%|███▎      | 3/9 [00:27<00:55,  0.11it/s, v_num=0, Train_Loss=0.154]Epoch 1:  33%|███▎      | 3/9 [00:27<00:55,  0.11it/s, v_num=0, Train_Loss=0.166]Epoch 1:  44%|████▍     | 4/9 [00:29<00:36,  0.14it/s, v_num=0, Train_Loss=0.166]Epoch 1:  44%|████▍     | 4/9 [00:29<00:36,  0.14it/s, v_num=0, Train_Loss=0.149]Epoch 1:  56%|█████▌    | 5/9 [00:30<00:24,  0.16it/s, v_num=0, Train_Loss=0.149]Epoch 1:  56%|█████▌    | 5/9 [00:30<00:24,  0.16it/s, v_num=0, Train_Loss=0.154]Epoch 1:  67%|██████▋   | 6/9 [00:32<00:16,  0.18it/s, v_num=0, Train_Loss=0.154]Epoch 1:  67%|██████▋   | 6/9 [00:32<00:16,  0.18it/s, v_num=0, Train_Loss=0.150]Epoch 1:  78%|███████▊  | 7/9 [00:33<00:09,  0.21it/s, v_num=0, Train_Loss=0.150]Epoch 1:  78%|███████▊  | 7/9 [00:33<00:09,  0.21it/s, v_num=0, Train_Loss=0.160]Epoch 1:  89%|████████▉ | 8/9 [00:35<00:04,  0.22it/s, v_num=0, Train_Loss=0.160]Epoch 1:  89%|████████▉ | 8/9 [00:35<00:04,  0.22it/s, v_num=0, Train_Loss=0.151]Epoch 1: 100%|██████████| 9/9 [00:36<00:00,  0.24it/s, v_num=0, Train_Loss=0.151]Epoch 1: 100%|██████████| 9/9 [00:36<00:00,  0.24it/s, v_num=0, Train_Loss=0.161]Epoch 1: 100%|██████████| 9/9 [00:36<00:00,  0.24it/s, v_num=0, Train_Loss=0.161]Epoch 1:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.161]        Epoch 2:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.161]Epoch 2:  11%|█         | 1/9 [00:24<03:16,  0.04it/s, v_num=0, Train_Loss=0.161]Epoch 2:  11%|█         | 1/9 [00:24<03:16,  0.04it/s, v_num=0, Train_Loss=0.155]Epoch 2:  22%|██▏       | 2/9 [00:26<01:31,  0.08it/s, v_num=0, Train_Loss=0.155]Epoch 2:  22%|██▏       | 2/9 [00:26<01:31,  0.08it/s, v_num=0, Train_Loss=0.158]Epoch 2:  33%|███▎      | 3/9 [00:27<00:55,  0.11it/s, v_num=0, Train_Loss=0.158]Epoch 2:  33%|███▎      | 3/9 [00:27<00:55,  0.11it/s, v_num=0, Train_Loss=0.150]Epoch 2:  44%|████▍     | 4/9 [00:28<00:36,  0.14it/s, v_num=0, Train_Loss=0.150]Epoch 2:  44%|████▍     | 4/9 [00:28<00:36,  0.14it/s, v_num=0, Train_Loss=0.144]Epoch 2:  56%|█████▌    | 5/9 [00:30<00:24,  0.16it/s, v_num=0, Train_Loss=0.144]Epoch 2:  56%|█████▌    | 5/9 [00:30<00:24,  0.16it/s, v_num=0, Train_Loss=0.141]Epoch 2:  67%|██████▋   | 6/9 [00:31<00:15,  0.19it/s, v_num=0, Train_Loss=0.141]Epoch 2:  67%|██████▋   | 6/9 [00:31<00:15,  0.19it/s, v_num=0, Train_Loss=0.144]Epoch 2:  78%|███████▊  | 7/9 [00:33<00:09,  0.21it/s, v_num=0, Train_Loss=0.144]Epoch 2:  78%|███████▊  | 7/9 [00:33<00:09,  0.21it/s, v_num=0, Train_Loss=0.147]Epoch 2:  89%|████████▉ | 8/9 [00:34<00:04,  0.23it/s, v_num=0, Train_Loss=0.147]Epoch 2:  89%|████████▉ | 8/9 [00:34<00:04,  0.23it/s, v_num=0, Train_Loss=0.156]Epoch 2: 100%|██████████| 9/9 [00:36<00:00,  0.25it/s, v_num=0, Train_Loss=0.156]Epoch 2: 100%|██████████| 9/9 [00:36<00:00,  0.25it/s, v_num=0, Train_Loss=0.131]Epoch 2: 100%|██████████| 9/9 [00:36<00:00,  0.25it/s, v_num=0, Train_Loss=0.131]Epoch 2:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.131]        Epoch 3:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.131]Epoch 3:  11%|█         | 1/9 [00:24<03:13,  0.04it/s, v_num=0, Train_Loss=0.131]Epoch 3:  11%|█         | 1/9 [00:24<03:13,  0.04it/s, v_num=0, Train_Loss=0.132]Epoch 3:  22%|██▏       | 2/9 [00:25<01:29,  0.08it/s, v_num=0, Train_Loss=0.132]Epoch 3:  22%|██▏       | 2/9 [00:25<01:29,  0.08it/s, v_num=0, Train_Loss=0.152]Epoch 3:  33%|███▎      | 3/9 [00:26<00:52,  0.11it/s, v_num=0, Train_Loss=0.152]Epoch 3:  33%|███▎      | 3/9 [00:26<00:52,  0.11it/s, v_num=0, Train_Loss=0.140]Epoch 3:  44%|████▍     | 4/9 [00:28<00:35,  0.14it/s, v_num=0, Train_Loss=0.140]Epoch 3:  44%|████▍     | 4/9 [00:28<00:35,  0.14it/s, v_num=0, Train_Loss=0.129]Epoch 3:  56%|█████▌    | 5/9 [00:29<00:23,  0.17it/s, v_num=0, Train_Loss=0.129]Epoch 3:  56%|█████▌    | 5/9 [00:29<00:23,  0.17it/s, v_num=0, Train_Loss=0.136][rank0]:[W115 21:15:41.675701963 reducer.cpp:1400] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+Epoch 3:  67%|██████▋   | 6/9 [00:31<00:15,  0.19it/s, v_num=0, Train_Loss=0.136]Epoch 3:  67%|██████▋   | 6/9 [00:31<00:15,  0.19it/s, v_num=0, Train_Loss=0.135]Epoch 3:  78%|███████▊  | 7/9 [00:32<00:09,  0.21it/s, v_num=0, Train_Loss=0.135]Epoch 3:  78%|███████▊  | 7/9 [00:32<00:09,  0.21it/s, v_num=0, Train_Loss=0.151][rank1]:[W115 21:15:44.792815690 reducer.cpp:1400] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+Epoch 3:  89%|████████▉ | 8/9 [00:34<00:04,  0.23it/s, v_num=0, Train_Loss=0.151]Epoch 3:  89%|████████▉ | 8/9 [00:34<00:04,  0.23it/s, v_num=0, Train_Loss=0.139]Epoch 3: 100%|██████████| 9/9 [00:35<00:00,  0.25it/s, v_num=0, Train_Loss=0.139]Epoch 3: 100%|██████████| 9/9 [00:35<00:00,  0.25it/s, v_num=0, Train_Loss=0.150]Epoch 3: 100%|██████████| 9/9 [00:35<00:00,  0.25it/s, v_num=0, Train_Loss=0.150]Epoch 3:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.150]        Epoch 4:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.150]Epoch 4:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.150]Epoch 4:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.121]Epoch 4:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.121]Epoch 4:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.136]Epoch 4:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.136]Epoch 4:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.131]Epoch 4:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.131]Epoch 4:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.159]Epoch 4:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.159]Epoch 4:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.128]Epoch 4:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.128]Epoch 4:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.131]Epoch 4:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.131]Epoch 4:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.118]Epoch 4:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.118]Epoch 4:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.132]Epoch 4: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.132]Epoch 4: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.137]Epoch 4: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.137]Epoch 4:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.137]        Epoch 5:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.137]Epoch 5:  11%|█         | 1/9 [00:23<03:10,  0.04it/s, v_num=0, Train_Loss=0.137]Epoch 5:  11%|█         | 1/9 [00:23<03:10,  0.04it/s, v_num=0, Train_Loss=0.128]Epoch 5:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.128]Epoch 5:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.106]Epoch 5:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.106]Epoch 5:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.154]Epoch 5:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.154]Epoch 5:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.138]Epoch 5:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.138]Epoch 5:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.139]Epoch 5:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.139]Epoch 5:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.132]Epoch 5:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.132]Epoch 5:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.132]Epoch 5:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.132]Epoch 5:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.123]Epoch 5: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.123]Epoch 5: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.128]Epoch 5: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.128]Epoch 5:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.128]        Epoch 6:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.128]Epoch 6:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.128]Epoch 6:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.119]Epoch 6:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.119]Epoch 6:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.121]Epoch 6:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.121]Epoch 6:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.129]Epoch 6:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.129]Epoch 6:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.133]Epoch 6:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.133]Epoch 6:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.117]Epoch 6:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.117]Epoch 6:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.129]Epoch 6:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.129]Epoch 6:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.144]Epoch 6:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.144]Epoch 6:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.122]Epoch 6: 100%|██████████| 9/9 [00:32<00:00,  0.28it/s, v_num=0, Train_Loss=0.122]Epoch 6: 100%|██████████| 9/9 [00:32<00:00,  0.28it/s, v_num=0, Train_Loss=0.110]Epoch 6: 100%|██████████| 9/9 [00:32<00:00,  0.28it/s, v_num=0, Train_Loss=0.110]Epoch 6:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.110]        Epoch 7:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.110]Epoch 7:  11%|█         | 1/9 [00:23<03:06,  0.04it/s, v_num=0, Train_Loss=0.110]Epoch 7:  11%|█         | 1/9 [00:23<03:06,  0.04it/s, v_num=0, Train_Loss=0.125]Epoch 7:  22%|██▏       | 2/9 [00:24<01:24,  0.08it/s, v_num=0, Train_Loss=0.125]Epoch 7:  22%|██▏       | 2/9 [00:24<01:24,  0.08it/s, v_num=0, Train_Loss=0.106]Epoch 7:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.106]Epoch 7:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.110]Epoch 7:  44%|████▍     | 4/9 [00:26<00:32,  0.15it/s, v_num=0, Train_Loss=0.110]Epoch 7:  44%|████▍     | 4/9 [00:26<00:32,  0.15it/s, v_num=0, Train_Loss=0.121]Epoch 7:  56%|█████▌    | 5/9 [00:27<00:21,  0.18it/s, v_num=0, Train_Loss=0.121]Epoch 7:  56%|█████▌    | 5/9 [00:27<00:21,  0.18it/s, v_num=0, Train_Loss=0.136]Epoch 7:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.136]Epoch 7:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.112]Epoch 7:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.112]Epoch 7:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.135]Epoch 7:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.135]Epoch 7:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.118]Epoch 7: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.118]Epoch 7: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.128]Epoch 7: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.128]Epoch 7:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.128]        Epoch 8:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.128]Epoch 8:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.128]Epoch 8:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.119]Epoch 8:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.119]Epoch 8:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.115]Epoch 8:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.115]Epoch 8:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.126]Epoch 8:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.126]Epoch 8:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.107]Epoch 8:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.107]Epoch 8:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.117]Epoch 8:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.117]Epoch 8:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.124]Epoch 8:  78%|███████▊  | 7/9 [00:29<00:08,  0.23it/s, v_num=0, Train_Loss=0.124]Epoch 8:  78%|███████▊  | 7/9 [00:29<00:08,  0.23it/s, v_num=0, Train_Loss=0.115]Epoch 8:  89%|████████▉ | 8/9 [00:31<00:03,  0.26it/s, v_num=0, Train_Loss=0.115]Epoch 8:  89%|████████▉ | 8/9 [00:31<00:03,  0.26it/s, v_num=0, Train_Loss=0.118]Epoch 8: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.118]Epoch 8: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.121]Epoch 8: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.121]Epoch 8:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.121]        Epoch 9:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.121]Epoch 9:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.121]Epoch 9:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.102]Epoch 9:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.102]Epoch 9:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.124]Epoch 9:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.124]Epoch 9:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.108]Epoch 9:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.108]Epoch 9:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.111]Epoch 9:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.111]Epoch 9:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.117]Epoch 9:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.117]Epoch 9:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.111]Epoch 9:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.111]Epoch 9:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.131]Epoch 9:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.131]Epoch 9:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.109]Epoch 9: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.109]Epoch 9: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.108]Epoch 9: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.108]Epoch 9:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.108]        Epoch 10:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.108]Epoch 10:  11%|█         | 1/9 [00:23<03:07,  0.04it/s, v_num=0, Train_Loss=0.108]Epoch 10:  11%|█         | 1/9 [00:23<03:07,  0.04it/s, v_num=0, Train_Loss=0.109]Epoch 10:  22%|██▏       | 2/9 [00:25<01:27,  0.08it/s, v_num=0, Train_Loss=0.109]Epoch 10:  22%|██▏       | 2/9 [00:25<01:27,  0.08it/s, v_num=0, Train_Loss=0.118]Epoch 10:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.118]Epoch 10:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.108]Epoch 10:  44%|████▍     | 4/9 [00:27<00:33,  0.15it/s, v_num=0, Train_Loss=0.108]Epoch 10:  44%|████▍     | 4/9 [00:27<00:33,  0.15it/s, v_num=0, Train_Loss=0.105]Epoch 10:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.105]Epoch 10:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.106]Epoch 10:  67%|██████▋   | 6/9 [00:29<00:14,  0.21it/s, v_num=0, Train_Loss=0.106]Epoch 10:  67%|██████▋   | 6/9 [00:29<00:14,  0.21it/s, v_num=0, Train_Loss=0.115]Epoch 10:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.115]Epoch 10:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.114]Epoch 10:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.114]Epoch 10:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.121]Epoch 10: 100%|██████████| 9/9 [00:32<00:00,  0.28it/s, v_num=0, Train_Loss=0.121]Epoch 10: 100%|██████████| 9/9 [00:32<00:00,  0.28it/s, v_num=0, Train_Loss=0.109]Epoch 10: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.109]Epoch 10:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.109]        Epoch 11:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.109]Epoch 11:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.109]Epoch 11:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.121]Epoch 11:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.121]Epoch 11:  22%|██▏       | 2/9 [00:24<01:25,  0.08it/s, v_num=0, Train_Loss=0.100]Epoch 11:  33%|███▎      | 3/9 [00:26<00:52,  0.12it/s, v_num=0, Train_Loss=0.100]Epoch 11:  33%|███▎      | 3/9 [00:26<00:52,  0.12it/s, v_num=0, Train_Loss=0.124]Epoch 11:  44%|████▍     | 4/9 [00:27<00:34,  0.15it/s, v_num=0, Train_Loss=0.124]Epoch 11:  44%|████▍     | 4/9 [00:27<00:34,  0.15it/s, v_num=0, Train_Loss=0.128]Epoch 11:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.128]Epoch 11:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.113]Epoch 11:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.113]Epoch 11:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.102]Epoch 11:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.102]Epoch 11:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.101]Epoch 11:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.101]Epoch 11:  89%|████████▉ | 8/9 [00:31<00:03,  0.25it/s, v_num=0, Train_Loss=0.102]Epoch 11: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.102]Epoch 11: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.114]Epoch 11: 100%|██████████| 9/9 [00:32<00:00,  0.27it/s, v_num=0, Train_Loss=0.114]Epoch 11:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.114]        Epoch 12:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.114]Epoch 12:  11%|█         | 1/9 [00:23<03:06,  0.04it/s, v_num=0, Train_Loss=0.114]Epoch 12:  11%|█         | 1/9 [00:23<03:06,  0.04it/s, v_num=0, Train_Loss=0.111]Epoch 12:  22%|██▏       | 2/9 [00:24<01:24,  0.08it/s, v_num=0, Train_Loss=0.111]Epoch 12:  22%|██▏       | 2/9 [00:24<01:24,  0.08it/s, v_num=0, Train_Loss=0.105]Epoch 12:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.105]Epoch 12:  33%|███▎      | 3/9 [00:25<00:50,  0.12it/s, v_num=0, Train_Loss=0.106]Epoch 12:  44%|████▍     | 4/9 [00:26<00:32,  0.15it/s, v_num=0, Train_Loss=0.106]Epoch 12:  44%|████▍     | 4/9 [00:26<00:32,  0.15it/s, v_num=0, Train_Loss=0.112]Epoch 12:  56%|█████▌    | 5/9 [00:27<00:21,  0.18it/s, v_num=0, Train_Loss=0.112]Epoch 12:  56%|█████▌    | 5/9 [00:27<00:21,  0.18it/s, v_num=0, Train_Loss=0.115]Epoch 12:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.115]Epoch 12:  67%|██████▋   | 6/9 [00:28<00:14,  0.21it/s, v_num=0, Train_Loss=0.114]Epoch 12:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.114]Epoch 12:  78%|███████▊  | 7/9 [00:29<00:08,  0.24it/s, v_num=0, Train_Loss=0.0967]Epoch 12:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.0967]Epoch 12:  89%|████████▉ | 8/9 [00:30<00:03,  0.26it/s, v_num=0, Train_Loss=0.111] Epoch 12: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.111]Epoch 12: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.105]Epoch 12: 100%|██████████| 9/9 [00:31<00:00,  0.28it/s, v_num=0, Train_Loss=0.105]Epoch 12:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.105]        Epoch 13:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.105]Epoch 13:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.105]Epoch 13:  11%|█         | 1/9 [00:23<03:08,  0.04it/s, v_num=0, Train_Loss=0.107]Epoch 13:  22%|██▏       | 2/9 [00:25<01:27,  0.08it/s, v_num=0, Train_Loss=0.107]Epoch 13:  22%|██▏       | 2/9 [00:25<01:27,  0.08it/s, v_num=0, Train_Loss=0.118]Epoch 13:  33%|███▎      | 3/9 [00:26<00:52,  0.12it/s, v_num=0, Train_Loss=0.118]Epoch 13:  33%|███▎      | 3/9 [00:26<00:52,  0.12it/s, v_num=0, Train_Loss=0.101]Epoch 13:  44%|████▍     | 4/9 [00:27<00:33,  0.15it/s, v_num=0, Train_Loss=0.101]Epoch 13:  44%|████▍     | 4/9 [00:27<00:33,  0.15it/s, v_num=0, Train_Loss=0.103]Epoch 13:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.103]Epoch 13:  56%|█████▌    | 5/9 [00:28<00:22,  0.18it/s, v_num=0, Train_Loss=0.106]Epoch 13:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.106]Epoch 13:  67%|██████▋   | 6/9 [00:29<00:14,  0.20it/s, v_num=0, Train_Loss=0.108]Epoch 13:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.108]Epoch 13:  78%|███████▊  | 7/9 [00:30<00:08,  0.23it/s, v_num=0, Train_Loss=0.0977]Epoch 13:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.0977]Epoch 13:  89%|████████▉ | 8/9 [00:32<00:04,  0.25it/s, v_num=0, Train_Loss=0.111] Epoch 13: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.111]Epoch 13: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.110]Epoch 13: 100%|██████████| 9/9 [00:33<00:00,  0.27it/s, v_num=0, Train_Loss=0.110]Epoch 13:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.110]        Epoch 14:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.110]Epoch 14:  11%|█         | 1/9 [00:23<03:11,  0.04it/s, v_num=0, Train_Loss=0.110]Epoch 14:  11%|█         | 1/9 [00:23<03:11,  0.04it/s, v_num=0, Train_Loss=0.110]Epoch 14:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.110]Epoch 14:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.105]Epoch 14:  33%|███▎      | 3/9 [00:26<00:52,  0.11it/s, v_num=0, Train_Loss=0.105]Epoch 14:  33%|███▎      | 3/9 [00:26<00:52,  0.11it/s, v_num=0, Train_Loss=0.102]Epoch 14:  44%|████▍     | 4/9 [00:28<00:35,  0.14it/s, v_num=0, Train_Loss=0.102]Epoch 14:  44%|████▍     | 4/9 [00:28<00:35,  0.14it/s, v_num=0, Train_Loss=0.0976]Epoch 14:  56%|█████▌    | 5/9 [00:29<00:23,  0.17it/s, v_num=0, Train_Loss=0.0976]Epoch 14:  56%|█████▌    | 5/9 [00:29<00:23,  0.17it/s, v_num=0, Train_Loss=0.103] Epoch 14:  67%|██████▋   | 6/9 [00:30<00:15,  0.20it/s, v_num=0, Train_Loss=0.103]Epoch 14:  67%|██████▋   | 6/9 [00:30<00:15,  0.20it/s, v_num=0, Train_Loss=0.102]Epoch 14:  78%|███████▊  | 7/9 [00:31<00:08,  0.22it/s, v_num=0, Train_Loss=0.102]Epoch 14:  78%|███████▊  | 7/9 [00:31<00:08,  0.22it/s, v_num=0, Train_Loss=0.111]Epoch 14:  89%|████████▉ | 8/9 [00:32<00:04,  0.24it/s, v_num=0, Train_Loss=0.111]Epoch 14:  89%|████████▉ | 8/9 [00:32<00:04,  0.24it/s, v_num=0, Train_Loss=0.103]Epoch 14: 100%|██████████| 9/9 [00:33<00:00,  0.26it/s, v_num=0, Train_Loss=0.103]Epoch 14: 100%|██████████| 9/9 [00:33<00:00,  0.26it/s, v_num=0, Train_Loss=0.104]Epoch 14: 100%|██████████| 9/9 [00:33<00:00,  0.26it/s, v_num=0, Train_Loss=0.104]Epoch 14:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.104]        Epoch 15:   0%|          | 0/9 [00:00<?, ?it/s, v_num=0, Train_Loss=0.104]Epoch 15:  11%|█         | 1/9 [00:23<03:07,  0.04it/s, v_num=0, Train_Loss=0.104]Epoch 15:  11%|█         | 1/9 [00:23<03:07,  0.04it/s, v_num=0, Train_Loss=0.105]Epoch 15:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.105]Epoch 15:  22%|██▏       | 2/9 [00:24<01:26,  0.08it/s, v_num=0, Train_Loss=0.103]Epoch 15:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.103]Epoch 15:  33%|███▎      | 3/9 [00:25<00:51,  0.12it/s, v_num=0, Train_Loss=0.107]Epoch 15:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.107]Epoch 15:  44%|████▍     | 4/9 [00:26<00:33,  0.15it/s, v_num=0, Train_Loss=0.104]Epoch 15:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.104]Epoch 15:  56%|█████▌    | 5/9 [00:27<00:22,  0.18it/s, v_num=0, Train_Loss=0.104]

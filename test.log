@@ -1,0 +1,120 @@
+The following values were not passed to `accelerate launch` and had defaults used instead:
+	`--num_machines` was set to a value of `1`
+	`--mixed_precision` was set to a value of `'no'`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/utils/launch.py:238: UserWarning: Port `29502` is already in use. Accelerate will attempt to launch in a standalone-like mode by finding an open port automatically for this session. If this current attempt fails, or for more control in future runs, please specify a different port (e.g., `--main_process_port <your_chosen_port>`) or use `--main_process_port 0` for automatic selection in your launch command or Accelerate config file.
+  warnings.warn(
+[Test] Loading checkpoint from: /home/cxhlab/lqj/moceir/moceirv1-20260123_multi_network/experiment/MoCE_IR_S-2026_01_30_12_32_19/checkpoints/best_psnr-epoch=0-psnr=15.722-ssim=0.3857.ckpt
+[Test] Loading checkpoint from: /home/cxhlab/lqj/moceir/moceirv1-20260123_multi_network/experiment/MoCE_IR_S-2026_01_30_12_32_19/checkpoints/best_psnr-epoch=0-psnr=15.722-ssim=0.3857.ckpt
+Using generic test/lr & test/gt dataset structure
+Total Deblur testing pairs : 1999
+--------> Testing on gopro testset.
+
+
+Using generic test/lr & test/gt dataset structure
+Total Deblur testing pairs : 1999
+--------> Testing on gopro testset.
+
+
+  0%|          | 0/1000 [00:00<?, ?it/s]  0%|          | 1/1000 [00:02<45:08,  2.71s/it]  0%|          | 2/1000 [00:05<41:09,  2.47s/it]  0%|          | 3/1000 [00:06<36:02,  2.17s/it]  0%|          | 4/1000 [00:08<33:24,  2.01s/it]  0%|          | 5/1000 [00:10<34:13,  2.06s/it]  1%|          | 6/1000 [00:13<36:10,  2.18s/it]  1%|          | 7/1000 [00:15<37:22,  2.26s/it]  1%|          | 8/1000 [00:17<36:30,  2.21s/it]libpng warning: iCCP: profile 'ICC Profile': 'desc': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'wtpt': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'bkpt': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'rXYZ': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'gXYZ': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'bXYZ': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'dmnd': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'dmdd': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'vued': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'view': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'lumi': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'meas': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'tech': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'rTRC': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'gTRC': ICC profile tag start not a multiple of 4
+libpng warning: iCCP: profile 'ICC Profile': 'bTRC': ICC profile tag start not a multiple of 4
+  1%|          | 9/1000 [00:19<33:29,  2.03s/it]  1%|          | 10/1000 [00:21<33:38,  2.04s/it]  1%|          | 11/1000 [00:23<34:53,  2.12s/it]  1%|          | 12/1000 [00:25<33:57,  2.06s/it]  1%|▏         | 13/1000 [00:27<34:31,  2.10s/it]  1%|▏         | 14/1000 [00:29<34:51,  2.12s/it]  2%|▏         | 15/1000 [00:32<35:01,  2.13s/it]  2%|▏         | 16/1000 [00:34<34:44,  2.12s/it]  2%|▏         | 17/1000 [00:36<35:58,  2.20s/it]  2%|▏         | 18/1000 [00:38<35:23,  2.16s/it]  2%|▏         | 19/1000 [00:41<37:06,  2.27s/it]  2%|▏         | 20/1000 [00:43<37:30,  2.30s/it]  2%|▏         | 21/1000 [00:45<37:31,  2.30s/it]  2%|▏         | 22/1000 [00:47<35:48,  2.20s/it]  2%|▏         | 23/1000 [00:50<36:06,  2.22s/it]  2%|▏         | 24/1000 [00:52<36:04,  2.22s/it]  2%|▎         | 25/1000 [00:54<34:41,  2.13s/it]  3%|▎         | 26/1000 [00:56<35:05,  2.16s/it]  3%|▎         | 27/1000 [00:58<33:46,  2.08s/it]  3%|▎         | 28/1000 [01:00<33:50,  2.09s/it]  3%|▎         | 29/1000 [01:02<32:08,  1.99s/it]  3%|▎         | 30/1000 [01:04<33:25,  2.07s/it]  3%|▎         | 31/1000 [01:06<33:03,  2.05s/it]  3%|▎         | 32/1000 [01:08<33:01,  2.05s/it]  3%|▎         | 33/1000 [01:10<33:00,  2.05s/it]  3%|▎         | 34/1000 [01:12<34:04,  2.12s/it]  4%|▎         | 35/1000 [01:14<33:06,  2.06s/it]  4%|▎         | 36/1000 [01:17<38:00,  2.37s/it]  4%|▎         | 37/1000 [01:20<38:19,  2.39s/it]  4%|▍         | 38/1000 [01:22<37:55,  2.37s/it]  4%|▍         | 39/1000 [01:24<36:06,  2.25s/it]  4%|▍         | 40/1000 [01:26<35:17,  2.21s/it]  4%|▍         | 41/1000 [01:29<35:58,  2.25s/it]  4%|▍         | 42/1000 [01:31<34:56,  2.19s/it]  4%|▍         | 43/1000 [01:33<35:29,  2.23s/it]  4%|▍         | 44/1000 [01:37<42:59,  2.70s/it]  4%|▍         | 45/1000 [01:40<48:12,  3.03s/it]  5%|▍         | 46/1000 [01:43<47:48,  3.01s/it]  5%|▍         | 47/1000 [01:46<47:34,  3.00s/it]  5%|▍         | 48/1000 [01:49<45:36,  2.87s/it]  5%|▍         | 49/1000 [01:52<45:00,  2.84s/it]  5%|▌         | 50/1000 [01:55<46:30,  2.94s/it]  5%|▌         | 51/1000 [01:58<45:31,  2.88s/it]  5%|▌         | 52/1000 [02:00<44:17,  2.80s/it]  5%|▌         | 53/1000 [02:04<49:46,  3.15s/it]  5%|▌         | 54/1000 [02:07<48:59,  3.11s/it]  6%|▌         | 55/1000 [02:10<48:45,  3.10s/it]  6%|▌         | 56/1000 [02:13<46:31,  2.96s/it]  6%|▌         | 57/1000 [02:16<46:58,  2.99s/it]  6%|▌         | 58/1000 [02:19<45:57,  2.93s/it]  6%|▌         | 59/1000 [02:22<46:17,  2.95s/it]  6%|▌         | 60/1000 [02:25<46:41,  2.98s/it]  6%|▌         | 61/1000 [02:28<45:15,  2.89s/it]  6%|▌         | 62/1000 [02:30<43:59,  2.81s/it]  6%|▋         | 63/1000 [02:33<43:28,  2.78s/it]  6%|▋         | 64/1000 [02:36<42:57,  2.75s/it]  6%|▋         | 65/1000 [02:38<43:11,  2.77s/it]  7%|▋         | 66/1000 [02:41<43:07,  2.77s/it]  7%|▋         | 67/1000 [02:44<43:18,  2.78s/it]  7%|▋         | 68/1000 [02:48<48:08,  3.10s/it]  7%|▋         | 69/1000 [02:51<46:38,  3.01s/it]  7%|▋         | 70/1000 [02:53<45:17,  2.92s/it]  7%|▋         | 71/1000 [02:56<46:03,  2.97s/it]  7%|▋         | 72/1000 [02:59<44:55,  2.90s/it]  7%|▋         | 73/1000 [03:02<43:42,  2.83s/it]  7%|▋         | 74/1000 [03:05<44:31,  2.88s/it]  8%|▊         | 75/1000 [03:07<43:23,  2.81s/it]  8%|▊         | 76/1000 [03:10<41:43,  2.71s/it]  8%|▊         | 77/1000 [03:12<39:08,  2.54s/it]  8%|▊         | 78/1000 [03:14<37:10,  2.42s/it]  8%|▊         | 79/1000 [03:16<35:21,  2.30s/it]  8%|▊         | 80/1000 [03:18<34:13,  2.23s/it]  8%|▊         | 81/1000 [03:21<34:35,  2.26s/it]  8%|▊         | 82/1000 [03:23<33:24,  2.18s/it]  8%|▊         | 83/1000 [03:25<32:37,  2.13s/it]  8%|▊         | 84/1000 [03:28<38:13,  2.50s/it]  8%|▊         | 85/1000 [03:31<39:46,  2.61s/it]  9%|▊         | 86/1000 [03:34<40:21,  2.65s/it]  9%|▊         | 87/1000 [03:37<41:58,  2.76s/it]  9%|▉         | 88/1000 [03:40<43:08,  2.84s/it]  9%|▉         | 89/1000 [03:43<43:54,  2.89s/it]  9%|▉         | 90/1000 [03:46<44:43,  2.95s/it]  9%|▉         | 91/1000 [03:49<44:18,  2.92s/it]  9%|▉         | 92/1000 [03:52<44:40,  2.95s/it]  9%|▉         | 93/1000 [03:55<44:51,  2.97s/it]  9%|▉         | 94/1000 [03:57<42:52,  2.84s/it] 10%|▉         | 95/1000 [04:01<45:43,  3.03s/it] 10%|▉         | 96/1000 [04:03<42:35,  2.83s/it] 10%|▉         | 97/1000 [04:05<40:10,  2.67s/it] 10%|▉         | 98/1000 [04:08<41:37,  2.77s/it] 10%|▉         | 99/1000 [04:11<39:17,  2.62s/it] 10%|█         | 100/1000 [04:13<37:12,  2.48s/it] 10%|█         | 101/1000 [04:15<36:04,  2.41s/it] 10%|█         | 102/1000 [04:17<35:24,  2.37s/it] 10%|█         | 103/1000 [04:20<35:31,  2.38s/it] 10%|█         | 104/1000 [04:22<35:14,  2.36s/it] 10%|█         | 105/1000 [04:24<33:13,  2.23s/it] 11%|█         | 106/1000 [04:26<32:41,  2.19s/it] 11%|█         | 107/1000 [04:28<33:35,  2.26s/it] 11%|█         | 108/1000 [04:31<33:47,  2.27s/it] 11%|█         | 109/1000 [04:33<32:37,  2.20s/it] 11%|█         | 110/1000 [04:36<36:31,  2.46s/it] 11%|█         | 111/1000 [04:38<34:43,  2.34s/it] 11%|█         | 112/1000 [04:40<34:25,  2.33s/it] 11%|█▏        | 113/1000 [04:43<34:21,  2.32s/it] 11%|█▏        | 114/1000 [04:45<34:20,  2.33s/it] 12%|█▏        | 115/1000 [04:48<36:55,  2.50s/it] 12%|█▏        | 116/1000 [04:51<39:43,  2.70s/it] 12%|█▏        | 117/1000 [04:53<36:12,  2.46s/it] 12%|█▏        | 118/1000 [04:55<34:11,  2.33s/it] 12%|█▏        | 119/1000 [04:57<34:25,  2.34s/it] 12%|█▏        | 120/1000 [04:59<33:49,  2.31s/it] 12%|█▏        | 121/1000 [05:02<36:25,  2.49s/it] 12%|█▏        | 122/1000 [05:04<34:37,  2.37s/it] 12%|█▏        | 123/1000 [05:07<33:53,  2.32s/it] 12%|█▏        | 124/1000 [05:09<34:05,  2.34s/it] 12%|█▎        | 125/1000 [05:11<33:51,  2.32s/it] 13%|█▎        | 126/1000 [05:13<32:35,  2.24s/it] 13%|█▎        | 127/1000 [05:15<31:36,  2.17s/it] 13%|█▎        | 128/1000 [05:17<30:20,  2.09s/it] 13%|█▎        | 129/1000 [05:19<29:29,  2.03s/it] 13%|█▎        | 130/1000 [05:22<30:51,  2.13s/it] 13%|█▎        | 131/1000 [05:24<33:44,  2.33s/it] 13%|█▎        | 132/1000 [05:26<32:18,  2.23s/it] 13%|█▎        | 133/1000 [05:28<31:29,  2.18s/it] 13%|█▎        | 134/1000 [05:31<32:00,  2.22s/it] 14%|█▎        | 135/1000 [05:33<30:40,  2.13s/it] 14%|█▎        | 136/1000 [05:35<30:42,  2.13s/it] 14%|█▎        | 137/1000 [05:37<30:13,  2.10s/it] 14%|█▍        | 138/1000 [05:39<31:09,  2.17s/it] 14%|█▍        | 139/1000 [05:41<30:28,  2.12s/it] 14%|█▍        | 140/1000 [05:43<31:22,  2.19s/it] 14%|█▍        | 141/1000 [05:46<30:55,  2.16s/it] 14%|█▍        | 142/1000 [05:48<31:52,  2.23s/it] 14%|█▍        | 143/1000 [05:50<31:09,  2.18s/it] 14%|█▍        | 144/1000 [05:52<30:13,  2.12s/it] 14%|█▍        | 145/1000 [05:54<30:16,  2.12s/it] 15%|█▍        | 146/1000 [05:57<32:19,  2.27s/it] 15%|█▍        | 147/1000 [05:59<31:12,  2.20s/it] 15%|█▍        | 148/1000 [06:01<31:55,  2.25s/it] 15%|█▍        | 149/1000 [06:04<32:33,  2.29s/it] 15%|█▌        | 150/1000 [06:05<30:59,  2.19s/it] 15%|█▌        | 151/1000 [06:08<31:41,  2.24s/it] 15%|█▌        | 152/1000 [06:10<31:54,  2.26s/it] 15%|█▌        | 153/1000 [06:12<30:05,  2.13s/it] 15%|█▌        | 154/1000 [06:14<30:01,  2.13s/it] 16%|█▌        | 155/1000 [06:16<28:42,  2.04s/it]W0130 14:00:36.752000 1396362 site-packages/torch/distributed/elastic/multiprocessing/api.py:897] Sending process 1396413 closing signal SIGTERM
+E0130 14:00:36.816000 1396362 site-packages/torch/distributed/elastic/multiprocessing/api.py:869] failed (exitcode: -9) local_rank: 0 (pid: 1396412) of binary: /home/cxhlab/anaconda3/envs/moceir/bin/python3.10
+Traceback (most recent call last):
+  File "/home/cxhlab/anaconda3/envs/moceir/bin/accelerate", line 7, in <module>
+    sys.exit(main())
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/accelerate_cli.py", line 50, in main
+    args.func(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/launch.py", line 1272, in launch_command
+    multi_gpu_launcher(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/launch.py", line 899, in multi_gpu_launcher
+    distrib_run.run(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/run.py", line 910, in run
+    elastic_launch(
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 138, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 269, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+========================================================
+test.py FAILED
+--------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+--------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-01-30_14:00:36
+  host      : pop-os
+  rank      : 0 (local_rank: 0)
+  exitcode  : -9 (pid: 1396412)
+  error_file: <N/A>
+  traceback : Signal 9 (SIGKILL) received by PID 1396412
+========================================================
+ibuted/launcher/api.py", line 269, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+========================================================
+test.py FAILED
+--------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+--------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-01-30_14:00:36
+  host      : pop-os
+  rank      : 1 (local_rank: 1)
+  exitcode  : -9 (pid: 1396047)
+  error_file: <N/A>
+  traceback : Signal 9 (SIGKILL) received by PID 1396047
+========================================================
+9%|█▊        | 187/1000 [05:32<32:44,  2.42s/it] 19%|█▉        | 188/1000 [05:34<31:28,  2.33s/it] 19%|█▉        | 189/1000 [05:36<31:12,  2.31s/it] 19%|█▉        | 190/1000 [05:38<30:06,  2.23s/it] 19%|█▉        | 191/1000 [05:41<33:08,  2.46s/it] 19%|█▉        | 192/1000 [05:43<30:38,  2.28s/it] 19%|█▉        | 193/1000 [05:45<31:03,  2.31s/it] 19%|█▉        | 194/1000 [05:47<29:52,  2.22s/it] 20%|█▉        | 195/1000 [05:49<27:16,  2.03s/it] 20%|█▉        | 196/1000 [05:51<28:12,  2.11s/it] 20%|█▉        | 197/1000 [05:53<28:36,  2.14s/it] 20%|█▉        | 198/1000 [05:55<26:20,  1.97s/it]libpng warning: iCCP: profile 'ICC Profile': 1000000h: invalid rendering intent
+ 20%|█▉        | 199/1000 [05:57<27:32,  2.06s/it] 20%|██        | 200/1000 [05:59<27:14,  2.04s/it] 20%|██        | 201/1000 [06:01<27:02,  2.03s/it] 20%|██        | 202/1000 [06:04<27:56,  2.10s/it] 20%|██        | 203/1000 [06:06<28:25,  2.14s/it] 20%|██        | 204/1000 [06:08<29:09,  2.20s/it] 20%|██        | 205/1000 [06:11<29:52,  2.26s/it] 21%|██        | 206/1000 [06:13<31:08,  2.35s/it] 21%|██        | 207/1000 [06:15<28:59,  2.19s/it] 21%|██        | 208/1000 [06:17<27:31,  2.09s/it] 21%|██        | 209/1000 [06:19<27:07,  2.06s/it] 21%|██        | 210/1000 [06:21<26:41,  2.03s/it] 21%|██        | 211/1000 [06:23<27:00,  2.05s/it] 21%|██        | 212/1000 [06:25<26:01,  1.98s/it] 21%|██▏       | 213/1000 [06:27<27:58,  2.13s/it] 21%|██▏       | 214/1000 [06:29<25:52,  1.97s/it] 22%|██▏       | 215/1000 [06:30<23:59,  1.83s/it] 22%|██▏       | 216/1000 [06:32<25:34,  1.96s/it] 22%|██▏       | 217/1000 [06:35<26:12,  2.01s/it] 22%|██▏       | 218/1000 [06:37<26:56,  2.07s/it] 22%|██▏       | 219/1000 [06:39<26:39,  2.05s/it] 22%|██▏       | 220/1000 [06:41<25:37,  1.97s/it] 22%|██▏       | 221/1000 [06:42<24:57,  1.92s/it] 22%|██▏       | 222/1000 [06:45<26:47,  2.07s/it] 22%|██▏       | 223/1000 [06:47<27:11,  2.10s/it] 22%|██▏       | 224/1000 [06:49<27:42,  2.14s/it] 22%|██▎       | 225/1000 [06:52<28:47,  2.23s/it] 23%|██▎       | 226/1000 [06:54<29:03,  2.25s/it] 23%|██▎       | 227/1000 [06:56<28:14,  2.19s/it] 23%|██▎       | 228/1000 [06:58<28:32,  2.22s/it] 23%|██▎       | 229/1000 [07:01<29:01,  2.26s/it] 23%|██▎       | 230/1000 [07:03<28:09,  2.19s/it] 23%|██▎       | 231/1000 [07:05<27:44,  2.17s/it] 23%|██▎       | 232/1000 [07:07<26:43,  2.09s/it] 23%|██▎       | 233/1000 [07:09<27:43,  2.17s/it] 23%|██▎       | 234/1000 [07:11<28:16,  2.22s/it] 24%|██▎       | 235/1000 [07:14<28:39,  2.25s/it] 24%|██▎       | 236/1000 [07:16<28:54,  2.27s/it] 24%|██▎       | 237/1000 [07:18<28:16,  2.22s/it] 24%|██▍       | 238/1000 [07:20<27:19,  2.15s/it] 24%|██▍       | 239/1000 [07:22<26:58,  2.13s/it] 24%|██▍       | 240/1000 [07:24<27:30,  2.17s/it] 24%|██▍       | 241/1000 [07:27<28:27,  2.25s/it] 24%|██▍       | 242/1000 [07:30<31:53,  2.53s/it] 24%|██▍       | 243/1000 [07:32<30:38,  2.43s/it] 24%|██▍       | 244/1000 [07:34<27:42,  2.20s/it] 24%|██▍       | 245/1000 [07:36<28:06,  2.23s/it] 25%|██▍       | 246/1000 [07:39<28:32,  2.27s/it] 25%|██▍       | 247/1000 [07:40<26:17,  2.10s/it] 25%|██▍       | 248/1000 [07:43<27:18,  2.18s/it]W0130 14:00:36.771000 1394050 site-packages/torch/distributed/elastic/multiprocessing/api.py:897] Sending process 1394105 closing signal SIGTERM
+E0130 14:00:36.803000 1394050 site-packages/torch/distributed/elastic/multiprocessing/api.py:869] failed (exitcode: -9) local_rank: 0 (pid: 1394104) of binary: /home/cxhlab/anaconda3/envs/moceir/bin/python3.10
+Traceback (most recent call last):
+  File "/home/cxhlab/anaconda3/envs/moceir/bin/accelerate", line 7, in <module>
+    sys.exit(main())
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/accelerate_cli.py", line 50, in main
+    args.func(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/launch.py", line 1272, in launch_command
+    multi_gpu_launcher(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/accelerate/commands/launch.py", line 899, in multi_gpu_launcher
+    distrib_run.run(args)
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/run.py", line 910, in run
+    elastic_launch(
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 138, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/cxhlab/anaconda3/envs/moceir/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 269, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+========================================================
+test.py FAILED
+--------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+--------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-01-30_14:00:36
+  host      : pop-os
+  rank      : 0 (local_rank: 0)
+  exitcode  : -9 (pid: 1394104)
+  error_file: <N/A>
+  traceback : Signal 9 (SIGKILL) received by PID 1394104
+========================================================
