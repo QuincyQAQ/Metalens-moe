@@ -305,25 +305,47 @@ class AIOTrainDataset(Dataset):
             generic_targets = os.path.join(data_file_dir, "train", "gt")
 
             if os.path.exists(metalens_inputs) and os.path.exists(metalens_targets):
-                lr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_inputs, "*.png")))]
-                hr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(metalens_targets, "*.png")))]
+                # 只加载配对的图像（lr和gt都存在且文件名匹配）
+                lr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(metalens_inputs, "*.png"))}
+                hr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(metalens_targets, "*.png"))}
+                common_names = sorted(set(lr_files.keys()) & set(hr_files.keys()))
+                lr_list = [{"img": lr_files[name], "de_type": id} for name in common_names]
+                hr_list = [{"img": hr_files[name], "de_type": id} for name in common_names]
                 self.deblur_lr.extend(lr_list)
                 self.deblur_hr.extend(hr_list)
+                if _is_main_process() and len(lr_files) != len(hr_files):
+                    print(f"Warning: {data_file_dir} - lr has {len(lr_files)} files, gt has {len(hr_files)} files, "
+                          f"matched {len(common_names)} pairs")
             elif os.path.exists(generic_inputs) and os.path.exists(generic_targets):
                 # 直接使用 <root>/train/lr 与 <root>/train/gt
-                lr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_inputs, "*.png")))]
-                hr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(generic_targets, "*.png")))]
+                # 只加载配对的图像（lr和gt都存在且文件名匹配）
+                lr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(generic_inputs, "*.png"))}
+                hr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(generic_targets, "*.png"))}
+                # 找到共同的文件名
+                common_names = sorted(set(lr_files.keys()) & set(hr_files.keys()))
+                lr_list = [{"img": lr_files[name], "de_type": id} for name in common_names]
+                hr_list = [{"img": hr_files[name], "de_type": id} for name in common_names]
                 self.deblur_lr.extend(lr_list)
                 self.deblur_hr.extend(hr_list)
+                if _is_main_process() and len(lr_files) != len(hr_files):
+                    print(f"Warning: {data_file_dir} - lr has {len(lr_files)} files, gt has {len(hr_files)} files, "
+                          f"matched {len(common_names)} pairs")
             else:
                 # 3) 回退到 GoPro 数据集结构
                 inputs = os.path.join(data_file_dir, "deblurring", "GoPro", "crop", "train", "input_crops")
                 targets = os.path.join(data_file_dir, "deblurring", "GoPro", "crop", "train", "target_crops")
                 if os.path.exists(inputs) and os.path.exists(targets):
-                    lr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(inputs, "*.png")))]
-                    hr_list = [{"img": x, "de_type": id} for x in sorted(glob.glob(os.path.join(targets, "*.png")))]
+                    # 只加载配对的图像（lr和gt都存在且文件名匹配）
+                    lr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(inputs, "*.png"))}
+                    hr_files = {os.path.basename(x): x for x in glob.glob(os.path.join(targets, "*.png"))}
+                    common_names = sorted(set(lr_files.keys()) & set(hr_files.keys()))
+                    lr_list = [{"img": lr_files[name], "de_type": id} for name in common_names]
+                    hr_list = [{"img": hr_files[name], "de_type": id} for name in common_names]
                     self.deblur_lr.extend(lr_list)
                     self.deblur_hr.extend(hr_list)
+                    if _is_main_process() and len(lr_files) != len(hr_files):
+                        print(f"Warning: {data_file_dir} - lr has {len(lr_files)} files, gt has {len(hr_files)} files, "
+                              f"matched {len(common_names)} pairs")
 
         self.deblur_counter = 0
         if _is_main_process():
