@@ -292,6 +292,11 @@ bark_notify_test_results() {
     # 获取本次训练的数据集列表（从环境变量）
     local trained_datasets_env="${MOCEIR_TRAINED_DATASETS:-}"
     
+    # 调试信息（可选，可以通过环境变量控制）
+    if [ "${BARK_DEBUG:-}" = "1" ]; then
+        echo "调试: MOCEIR_TRAINED_DATASETS = '$trained_datasets_env'"
+    fi
+    
     # 使用 Python 解析 CSV 并格式化输出
     local result=$(python3 << EOF
 import csv
@@ -325,25 +330,36 @@ try:
     
     # 按数据集分组，只统计本次训练的数据集
     datasets = defaultdict(list)
-    for row in rows:
-        dataset = row.get('dataset', '')
-        if dataset:
-            # 如果指定了本次训练的数据集列表，只统计这些数据集
-            if trained_datasets:
-                if dataset in trained_datasets:
-                    datasets[dataset].append(row)
-            else:
-                # 如果没有指定，统计所有数据集（向后兼容）
-                datasets[dataset].append(row)
     
-    # 如果没有找到本次训练的数据集，尝试从后往前查找最新的结果
-    if trained_datasets and not datasets:
-        # 从后往前遍历，找到每个训练数据集的最新结果
+    # 如果指定了本次训练的数据集列表，只统计这些数据集
+    if trained_datasets:
+        # 从后往前遍历，找到每个训练数据集的最新结果（只取最后一次）
         for row in reversed(rows):
             dataset = row.get('dataset', '')
-            if dataset in trained_datasets:
+            if dataset and dataset in trained_datasets:
+                # 只记录每个数据集的最后一次结果
                 if dataset not in datasets:
                     datasets[dataset] = [row]
+    else:
+        # 如果没有指定训练数据集，只显示最后几个数据集的最新结果（避免显示所有旧结果）
+        # 从后往前遍历，找到最后出现的几个不同数据集的最新结果
+        seen_datasets = set()
+        for row in reversed(rows):
+            dataset = row.get('dataset', '')
+            # 跳过 dataset 列是数字的旧数据（这些可能是 gflops 值）
+            if dataset:
+                try:
+                    float(dataset)
+                    continue
+                except (ValueError, TypeError):
+                    pass
+                
+                if dataset and dataset not in seen_datasets:
+                    datasets[dataset] = [row]
+                    seen_datasets.add(dataset)
+                    # 最多显示最后 3 个数据集的结果，避免显示太多旧结果
+                    if len(seen_datasets) >= 3:
+                        break
     
     # 如果没有提供模型信息，从本次训练的数据集结果中提取（优先使用最新的）
     filtered_rows = []
@@ -352,9 +368,10 @@ try:
         if datasets[dataset_name]:
             filtered_rows.append(datasets[dataset_name][-1])
     
-    # 如果过滤后没有结果，使用所有行（向后兼容）
-    if not filtered_rows:
-        filtered_rows = rows
+    # 如果过滤后没有结果，尝试从最后一行提取（向后兼容，但只显示最新结果）
+    if not filtered_rows and rows:
+        # 只使用最后一行，避免显示所有旧结果
+        filtered_rows = [rows[-1]]
     
     # 如果没有提供模型信息，从过滤后的第一行提取
     if not model_name and filtered_rows:
@@ -386,8 +403,14 @@ try:
         msg_parts.append(f"GPU: {gpu_info}")
     
     msg_parts.append("")
-    msg_parts.append(f"Found {len(datasets)} dataset(s) with test results:")
-    msg_parts.append("")
+    # 如果指定了训练数据集但没找到，添加提示信息
+    if trained_datasets and not datasets:
+        msg_parts.append(f"警告: 未找到本次训练的数据集结果（训练数据集: {', '.join(sorted(trained_datasets))}）")
+        msg_parts.append("显示最后几个数据集的最新结果:")
+        msg_parts.append("")
+    else:
+        msg_parts.append(f"Found {len(datasets)} dataset(s) with test results:")
+        msg_parts.append("")
     
     # 格式化每个数据集的结果（只显示每个数据集的最新结果）
     for dataset_name in sorted(datasets.keys()):

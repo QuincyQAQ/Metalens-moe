@@ -139,6 +139,11 @@ def validate_model(model_name: str, verbose: bool = False) -> Tuple[bool, str]:
             # 处理不同的输出类型（Tensor、字典、元组等）
             if isinstance(output, torch.Tensor):
                 output_shape = output.shape
+                # 检查输出是否有效
+                if torch.isnan(output).any():
+                    return False, "模型输出包含NaN值"
+                if torch.isinf(output).any():
+                    return False, "模型输出包含Inf值"
             elif isinstance(output, dict):
                 # 如果是字典，检查是否有有效的输出键
                 if len(output) == 0:
@@ -147,15 +152,27 @@ def validate_model(model_name: str, verbose: bool = False) -> Tuple[bool, str]:
                 first_value = next(iter(output.values()))
                 if isinstance(first_value, torch.Tensor):
                     output_shape = first_value.shape
+                    if torch.isnan(first_value).any():
+                        return False, "模型输出字典中的tensor包含NaN值"
+                    if torch.isinf(first_value).any():
+                        return False, "模型输出字典中的tensor包含Inf值"
                 else:
                     output_shape = f"dict with {len(output)} keys"
             elif isinstance(output, (tuple, list)):
-                # 如果是元组或列表，检查第一个元素
+                # 如果是元组或列表，检查第一个元素（通常是主输出）
                 if len(output) == 0:
                     return False, "模型输出是空元组/列表"
                 first_item = output[0]
                 if isinstance(first_item, torch.Tensor):
                     output_shape = first_item.shape
+                    # 检查输出是否有效
+                    if torch.isnan(first_item).any():
+                        return False, "模型输出元组中的tensor包含NaN值"
+                    if torch.isinf(first_item).any():
+                        return False, "模型输出元组中的tensor包含Inf值"
+                    # 检查输出形状是否匹配输入
+                    if first_item.shape != dummy_input.shape:
+                        return False, f"模型输出形状 {first_item.shape} 不匹配输入形状 {dummy_input.shape}"
                 else:
                     output_shape = f"{type(output).__name__} with {len(output)} items"
             else:

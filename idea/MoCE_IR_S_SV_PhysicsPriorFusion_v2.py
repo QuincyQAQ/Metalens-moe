@@ -389,17 +389,232 @@ class ModExpert(nn.Module):
         else:
             x = self.feat_extract(x, shared)
             return x
-        
 
+
+##########################################################################
+## 创新点2: 多模态物理先验融合专家
+## 物理先验编码器
+
+class DepthEncoder(nn.Module):
+    """
+    深度图编码器：将深度图编码为与图像特征维度匹配的特征
+    用于深度感知模糊校正专家
+    """
+    def __init__(self, in_channels=1, out_channels=64):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels // 2, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(out_channels // 2, out_channels, kernel_size=3, padding=1),
+            nn.GELU()
+        )
+    
+    def forward(self, depth_map): 
+        # depth_map: (B, 1, H, W)
+        return self.encoder(depth_map)
+
+
+class SpectralEncoder(nn.Module):
+    """
+    光谱信息编码器：将光谱数据编码为特征
+    用于光谱色差校正专家
+    """
+    def __init__(self, in_channels, out_channels=64):
+        super().__init__()
+        # 假设 spectral_data 是 (B, C_spectral, H, W) 的特征图
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels // 2, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(out_channels // 2, out_channels, kernel_size=3, padding=1),
+            nn.GELU()
+        )
+
+    def forward(self, spectral_data, H=None, W=None): 
+        # spectral_data: (B, C_spectral, H, W) or (B, C_spectral)
+        if spectral_data.dim() == 2:  # (B, C_spectral) -> (B, C_spectral, H, W)
+            if H is None or W is None:
+                raise ValueError("SpectralEncoder needs H, W for global spectral data.")
+            spectral_data = spectral_data.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, H, W)
+        return self.encoder(spectral_data)
+
+
+class OpticalParamEncoder(nn.Module):
+    """
+    光学参数编码器：将光学参数（如PSF参数）编码为特征
+    用于PSF引导细节恢复专家
+    """
+    def __init__(self, in_channels, out_channels=64):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(in_channels, out_channels * 2),
+            nn.GELU(),
+            nn.Linear(out_channels * 2, out_channels)
+        )
+
+    def forward(self, optical_params, H, W): 
+        # optical_params: (B, C_params)
+        encoded_params = self.encoder(optical_params)  # (B, out_channels)
+        # 扩展为特征图 (B, out_channels, H, W)
+        if H is None or W is None:
+            raise ValueError("OpticalParamEncoder needs H, W for global optical parameters.")
+        return encoded_params.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, H, W)
+
+
+##########################################################################
+## 融合机制
+
+class CrossAttentionFusion(nn.Module):
+    """
+    交叉注意力融合：使用交叉注意力机制融合图像特征和物理先验特征
+    参考：Attention Is All You Need (Vaswani et al., 2017)
+    """
+    def __init__(self, dim, num_heads=8):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, query_feat, key_value_feat): 
+        # query_feat: image_feat, key_value_feat: physics_feat
+        # 将特征图展平为序列 (B, H*W, C)
+        B, C, H, W = query_feat.shape
+        query_feat_flat = query_feat.flatten(2).transpose(1, 2)  # (B, H*W, C)
+        key_value_feat_flat = key_value_feat.flatten(2).transpose(1, 2)  # (B, H*W, C)
+
+        # Cross-attention
+        attn_output, _ = self.attn(query_feat_flat, key_value_feat_flat, key_value_feat_flat)
+        attn_output = self.proj(attn_output) + query_feat_flat  # Residual connection
+        
+        # 恢复为特征图 (B, C, H, W)
+        fused_feat = attn_output.transpose(1, 2).reshape(B, C, H, W)
+        return fused_feat
+
+
+class GatedFusion(nn.Module):
+    """
+    门控融合：使用门控机制自适应融合图像特征和物理先验特征
+    参考：Squeeze-and-Excitation Networks (Hu et al., 2018)
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.gate_conv = nn.Conv2d(dim * 2, dim, kernel_size=1)
+        self.sigmoid = nn.Sigmoid()
+        self.main_conv = nn.Conv2d(dim * 2, dim, kernel_size=3, padding=1)
+
+    def forward(self, image_feat, physics_feat):
+        combined_feat = torch.cat([image_feat, physics_feat], dim=1)
+        gate = self.sigmoid(self.gate_conv(combined_feat))
+        fused_feat = gate * self.main_conv(combined_feat) + (1 - gate) * image_feat  # Gated fusion with residual
+        return fused_feat
+
+
+##########################################################################
+## 物理先验融合专家
+
+class HeteroExpert(nn.Module):
+    """
+    异构专家：支持物理先验融合的专家
+    可以处理不同类型的物理先验（深度、光谱、光学参数）
+    """
+    def __init__(self, dim: int, rank: int, func: nn.Module, depth: int, patch_size: int, kernel_size: int, 
+                 expert_type: str = "standard", fusion_type: str = "gated"):
+        super(HeteroExpert, self).__init__()
+        
+        self.depth = depth
+        self.expert_type = expert_type
+        self.fusion_type = fusion_type
+        
+        # 投影层
+        self.proj = nn.ModuleList([
+            nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(rank, dim, kernel_size=1, padding=0, bias=False)
+        ])
+        
+        # 主体处理（使用传入的func，如FFTAttention）
+        self.body = func(rank, kernel_size=kernel_size, patch_size=patch_size)
+        
+        # 物理先验融合模块（仅当expert_type需要时创建）
+        if expert_type == "depth_aware_deblurring":
+            if fusion_type == "cross_attn":
+                self.fusion_module = CrossAttentionFusion(dim)
+            else:
+                self.fusion_module = GatedFusion(dim)
+        elif expert_type == "spectral_chromatic_aberration_correction":
+            if fusion_type == "cross_attn":
+                self.fusion_module = CrossAttentionFusion(dim)
+            else:
+                self.fusion_module = GatedFusion(dim)
+        elif expert_type == "psf_guided_detail_restoration":
+            if fusion_type == "cross_attn":
+                self.fusion_module = CrossAttentionFusion(dim)
+            else:
+                self.fusion_module = GatedFusion(dim)
+        else:
+            self.fusion_module = None
+            
+    def process(self, x, shared, physics_priors=None):
+        shortcut = x
+        
+        # 如果使用物理先验融合
+        if self.fusion_module is not None and physics_priors is not None:
+            if self.expert_type == "depth_aware_deblurring" and "depth_feat" in physics_priors:
+                x = self.fusion_module(x, physics_priors["depth_feat"])
+            elif self.expert_type == "spectral_chromatic_aberration_correction" and "spectral_feat" in physics_priors:
+                x = self.fusion_module(x, physics_priors["spectral_feat"])
+            elif self.expert_type == "psf_guided_detail_restoration" and "optical_param_feat" in physics_priors:
+                x = self.fusion_module(x, physics_priors["optical_param_feat"])
+        
+        x = self.proj[0](x)
+        x = self.body(x) * F.silu(self.proj[1](shared))
+        x = self.proj[2](x)
+        return x + shortcut
+
+    def feat_extract(self, feats, shared, physics_priors=None):
+        for _ in range(self.depth):
+            feat = self.process(feats, shared, physics_priors)
+        return feat
+    
+    def forward(self, x, shared, physics_priors=None):
+        b, c, h, w = x.shape
+        
+        if b == 0:
+            return x
+        else:
+            x = self.feat_extract(x, shared, physics_priors)
+            return x
+
+
+##########################################################################
+## 物理先验置信度预测器
+
+class PhysicsConfidencePredictor(nn.Module):
+    """
+    物理先验置信度预测器：评估每个物理先验的可靠性
+    用于自适应物理约束路由
+    """
+    def __init__(self, dim_physics_feat, num_physics_priors):
+        super().__init__()
+        self.predictor = nn.Sequential(
+            nn.Linear(dim_physics_feat * num_physics_priors, dim_physics_feat),
+            nn.GELU(),
+            nn.Linear(dim_physics_feat, num_physics_priors),
+            nn.Sigmoid()  # 输出每个物理先验的置信度 [0, 1]
+        )
+
+    def forward(self, encoded_physics_priors_pooled): 
+        # 拼接并池化后的物理先验特征 (B, dim_physics_feat * num_physics_priors)
+        return self.predictor(encoded_physics_priors_pooled)
 
 
 ########################################################################### 
-## Adapter Layer
+## Adapter Layer (支持物理先验融合)
 class AdapterLayer(nn.Module):
     def __init__(self, 
                  dim: int, rank: int, num_experts: int = 4, top_k: int=2, expert_layer: nn.Module=FFTAttention, stage_depth: int=1,
                  depth_type: str="lin", rank_type: str="constant", freq_dim: int=128, 
-                 with_complexity: bool=False, complexity_scale: str="min"):
+                 with_complexity: bool=False, complexity_scale: str="min",
+                 use_physics_prior: bool=False, expert_types: List[str]=None):
         super().__init__()            
         
         self.tau = 1
@@ -407,6 +622,12 @@ class AdapterLayer(nn.Module):
         self.top_k = top_k
         self.noise_eps = 1e-2
         self.num_experts = num_experts
+        self.use_physics_prior = use_physics_prior
+        
+        if expert_types is None:
+            expert_types = ["standard"] * num_experts
+        if len(expert_types) != num_experts:
+            expert_types = expert_types[:num_experts] + ["standard"] * (num_experts - len(expert_types))
 
         patch_sizes = [2**(i+2) for i in range(num_experts)]
         kernel_sizes = [3+(2*i) for i in range(num_experts)]
@@ -441,21 +662,30 @@ class AdapterLayer(nn.Module):
         else:
             raise(NotImplementedError)
         
-        self.experts = nn.ModuleList([
-            MySequential(*[ModExpert(dim, rank=rank, func=expert_layer, depth=depth, patch_size=patch, kernel_size=kernel)])
-            for idx, (depth, rank, patch, kernel) in enumerate(zip(depths, ranks, patch_sizes, kernel_sizes))
-        ])
+        # 使用HeteroExpert（支持物理先验融合）或ModExpert
+        if use_physics_prior:
+            self.experts = nn.ModuleList([
+                MySequential(*[HeteroExpert(dim, rank=rank, func=expert_layer, depth=depth, patch_size=patch, 
+                                          kernel_size=kernel, expert_type=expert_type)])
+                for idx, (depth, rank, patch, kernel, expert_type) in enumerate(zip(depths, ranks, patch_sizes, kernel_sizes, expert_types))
+            ])
+        else:
+            self.experts = nn.ModuleList([
+                MySequential(*[ModExpert(dim, rank=rank, func=expert_layer, depth=depth, patch_size=patch, kernel_size=kernel)])
+                for idx, (depth, rank, patch, kernel) in enumerate(zip(depths, ranks, patch_sizes, kernel_sizes))
+            ])
                 
         self.proj_out = nn.Conv2d(dim, dim, kernel_size=1, padding=0, bias=False)
         expert_complexity = torch.tensor([sum(p.numel() for p in expert.parameters()) for expert in self.experts])
         self.routing = RoutingFunction(
             dim, freq_dim, 
             num_experts=num_experts, k=top_k,
-            complexity=expert_complexity, use_complexity_bias=with_complexity, complexity_scale=complexity_scale
+            complexity=expert_complexity, use_complexity_bias=with_complexity, complexity_scale=complexity_scale,
+            use_physics_prior=use_physics_prior
         )
         
-    def forward(self, x, freq_emb, shared):
-        gates, top_k_indices, top_k_values, aux_loss = self.routing(x, freq_emb)
+    def forward(self, x, freq_emb, shared, raw_physics_priors=None):
+        gates, top_k_indices, top_k_values, aux_loss, encoded_physics_priors = self.routing(x, freq_emb, raw_physics_priors)
         self.loss = aux_loss
                 
         # routing
@@ -463,11 +693,31 @@ class AdapterLayer(nn.Module):
             dispatcher = SparseDispatcher(self.num_experts, gates)
             expert_inputs = dispatcher.dispatch(x)
             expert_shared_intputs = dispatcher.dispatch(shared)
-            expert_outputs = [self.experts[exp](expert_inputs[exp], expert_shared_intputs[exp]) for exp in range(len(self.experts))]
+            
+            # 如果使用物理先验，需要分发物理先验特征
+            if self.use_physics_prior and encoded_physics_priors is not None:
+                expert_outputs = []
+                for exp in range(len(self.experts)):
+                    # 为每个专家准备对应的物理先验
+                    physics_priors_exp = {}
+                    if encoded_physics_priors is not None:
+                        for key, feat in encoded_physics_priors.items():
+                            if feat is not None:
+                                feat_exp = dispatcher.dispatch(feat)[exp]
+                                physics_priors_exp[key] = feat_exp
+                    expert_outputs.append(self.experts[exp](expert_inputs[exp], expert_shared_intputs[exp], physics_priors_exp))
+            else:
+                expert_outputs = [self.experts[exp](expert_inputs[exp], expert_shared_intputs[exp]) for exp in range(len(self.experts))]
+            
             out = dispatcher.combine(expert_outputs, multiply_by_gates=True)
         else:
             selected_experts = [self.experts[i] for i in top_k_indices.squeeze(0)]  # Select the corresponding experts
-            expert_outputs = torch.stack([expert(x, shared) for expert in selected_experts], dim=1)
+            if self.use_physics_prior and encoded_physics_priors is not None:
+                expert_outputs = torch.stack([
+                    expert(x, shared, encoded_physics_priors) for expert in selected_experts
+                ], dim=1)
+            else:
+                expert_outputs = torch.stack([expert(x, shared) for expert in selected_experts], dim=1)
             gates = gates.gather(1, top_k_indices)  
             weighted_outputs = gates.unsqueeze(2).unsqueeze(3).unsqueeze(4) * expert_outputs 
             out = weighted_outputs.sum(dim=1)  # Sum across the top-k dimension to get the final output
@@ -477,16 +727,51 @@ class AdapterLayer(nn.Module):
 
     
 
+##########################################################################
+## 创新点2: 自适应物理约束路由
 class RoutingFunction(nn.Module):
-    def __init__(self, dim, freq_dim, num_experts, k, complexity, use_complexity_bias: bool = True, complexity_scale: str="max"):
+    def __init__(self, dim, freq_dim, num_experts, k, complexity, use_complexity_bias: bool = True, complexity_scale: str="max",
+                 use_physics_prior: bool=False, H=None, W=None):
         super(RoutingFunction, self).__init__()
         
+        self.use_physics_prior = use_physics_prior
+        self.H = H
+        self.W = W
+        
+        # 基础路由：图像特征和频率嵌入
         self.gate = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             Rearrange('b c 1 1 -> b c'),
             nn.Linear(dim, num_experts, bias=False)
         ) 
         self.freq_gate = nn.Linear(freq_dim, num_experts, bias=False)
+        
+        # 物理先验相关模块
+        if use_physics_prior:
+            # 物理先验编码器（假设有3种物理先验：深度、光谱、光学参数）
+            self.depth_encoder = DepthEncoder(in_channels=1, out_channels=dim // 4)
+            self.spectral_encoder = SpectralEncoder(in_channels=3, out_channels=dim // 4)  # 假设光谱数据是3通道图像
+            self.optical_param_encoder = OpticalParamEncoder(in_channels=16, out_channels=dim // 4)  # 假设光学参数是16维向量
+            self.num_physics_priors = 3  # 深度、光谱、光学参数
+
+            # 物理先验置信度预测器
+            self.physics_confidence_predictor = PhysicsConfidencePredictor(dim_physics_feat=dim // 4, num_physics_priors=self.num_physics_priors)
+
+            # 专家选择器：融合 SVFE、空间上下文、物理先验特征和置信度，生成专家权重
+            # 输入维度：SVFE (dim) + 物理先验特征 (dim//4 * num_physics_priors) + 物理先验置信度 (num_physics_priors)
+            self.expert_selector = nn.Sequential(
+                nn.Linear(dim + (dim // 4 * self.num_physics_priors) + self.num_physics_priors, dim * 2),
+                nn.GELU(),
+                nn.Linear(dim * 2, num_experts)
+            )
+        else:
+            self.depth_encoder = None
+            self.spectral_encoder = None
+            self.optical_param_encoder = None
+            self.num_physics_priors = 0
+            self.physics_confidence_predictor = None
+            self.expert_selector = None
+        
         if complexity_scale == "min":
             complexity = complexity / complexity.min()
         elif complexity_scale == "max":
@@ -499,8 +784,68 @@ class RoutingFunction(nn.Module):
         self.noise_std = (1.0 / num_experts) * 1.0
         self.use_complexity_bias = use_complexity_bias
 
-    def forward(self, x, freq_emb):
-        logits = self.gate(x) + self.freq_gate(freq_emb)
+    def forward(self, x, freq_emb, raw_physics_priors=None):
+        B, C, H, W = x.shape
+        
+        if self.use_physics_prior:
+            # 编码物理先验
+            encoded_physics_priors = {}
+            encoded_physics_priors_pooled = []
+            physics_confidence = None
+
+            if raw_physics_priors is not None:
+                if "depth_map" in raw_physics_priors and raw_physics_priors["depth_map"] is not None:
+                    depth_feat = self.depth_encoder(raw_physics_priors["depth_map"])
+                    encoded_physics_priors["depth_feat"] = depth_feat
+                    encoded_physics_priors_pooled.append(F.adaptive_avg_pool2d(depth_feat, (1, 1)).squeeze(-1).squeeze(-1))
+                else:
+                    encoded_physics_priors["depth_feat"] = None
+                    
+                if "spectral_data" in raw_physics_priors and raw_physics_priors["spectral_data"] is not None:
+                    spectral_feat = self.spectral_encoder(raw_physics_priors["spectral_data"], H=H, W=W)
+                    encoded_physics_priors["spectral_feat"] = spectral_feat
+                    encoded_physics_priors_pooled.append(F.adaptive_avg_pool2d(spectral_feat, (1, 1)).squeeze(-1).squeeze(-1))
+                else:
+                    encoded_physics_priors["spectral_feat"] = None
+                    
+                if "optical_params" in raw_physics_priors and raw_physics_priors["optical_params"] is not None:
+                    optical_param_feat = self.optical_param_encoder(raw_physics_priors["optical_params"], H=H, W=W)
+                    encoded_physics_priors["optical_param_feat"] = optical_param_feat
+                    encoded_physics_priors_pooled.append(F.adaptive_avg_pool2d(optical_param_feat, (1, 1)).squeeze(-1).squeeze(-1))
+                else:
+                    encoded_physics_priors["optical_param_feat"] = None
+                
+                if len(encoded_physics_priors_pooled) > 0:
+                    encoded_physics_priors_pooled_cat = torch.cat(encoded_physics_priors_pooled, dim=-1)
+                    physics_confidence = self.physics_confidence_predictor(encoded_physics_priors_pooled_cat)
+                else:
+                    # 如果没有物理先验，则生成一个全1的置信度，表示完全信任
+                    physics_confidence = torch.ones(B, self.num_physics_priors, device=x.device)
+            else:
+                # 如果没有物理先验，则生成一个全1的置信度，表示完全信任
+                physics_confidence = torch.ones(B, self.num_physics_priors, device=x.device)
+
+            # 对所有特征进行全局池化，用于专家选择
+            freq_diag_pool = F.adaptive_avg_pool2d(x, (1, 1)).squeeze(-1).squeeze(-1)  # 使用x作为空间上下文
+            
+            # 融合所有特征用于专家选择
+            fused_feat_for_selector_list = [freq_diag_pool]
+            if len(encoded_physics_priors_pooled) > 0:
+                fused_feat_for_selector_list.append(torch.cat(encoded_physics_priors_pooled, dim=-1))
+            else:
+                # 确保维度匹配，如果没有任何物理先验，则添加一个空的张量
+                fused_feat_for_selector_list.append(torch.zeros(B, 0, device=x.device))
+            fused_feat_for_selector_list.append(physics_confidence)
+
+            fused_feat_for_selector = torch.cat(fused_feat_for_selector_list, dim=-1)
+
+            # 生成专家选择权重
+            logits = self.expert_selector(fused_feat_for_selector) + self.freq_gate(freq_emb)
+        else:
+            # 标准路由（不使用物理先验）
+            logits = self.gate(x) + self.freq_gate(freq_emb)
+            encoded_physics_priors = None
+        
         if self.training:
             loss_imp = self.importance_loss(logits.softmax(dim=-1))
         
@@ -518,7 +863,7 @@ class RoutingFunction(nn.Module):
         
         # AMP 下 softmax/topk 的输出 dtype 可能与 logits 不一致，scatter_ 要求两者 dtype 相同
         gates = torch.zeros_like(logits).scatter_(1, top_k_indices, top_k_values.to(dtype=logits.dtype))
-        return gates, top_k_indices, top_k_values, aux_loss
+        return gates, top_k_indices, top_k_values, aux_loss, encoded_physics_priors
 
     def importance_loss(self, gating_scores):
         importance = gating_scores.sum(dim=0)
@@ -584,7 +929,8 @@ class EncoderBlock(nn.Module):
 ## Decoder Block
 class DecoderBlock(nn.Module):
     def __init__(self, dim, num_heads, ffn_expansion_factor, bias, LayerNorm_type, expert_layer, complexity_scale=None,
-                 rank=None, num_experts=None, top_k=None, depth_type=None, rank_type=None, stage_depth=None, freq_dim:int=128, with_complexity: bool=False):
+                 rank=None, num_experts=None, top_k=None, depth_type=None, rank_type=None, stage_depth=None, freq_dim:int=128, 
+                 with_complexity: bool=False, use_physics_prior: bool=False, expert_types: List[str]=None):
         super().__init__()
 
         self.norms = nn.ModuleList([
@@ -605,23 +951,22 @@ class DecoderBlock(nn.Module):
             dim, rank, 
             top_k=top_k, num_experts=num_experts, expert_layer=expert_layer, freq_dim=freq_dim,
             depth_type=depth_type, rank_type=rank_type, stage_depth=stage_depth, 
-            with_complexity=with_complexity, complexity_scale=complexity_scale
+            with_complexity=with_complexity, complexity_scale=complexity_scale,
+            use_physics_prior=use_physics_prior, expert_types=expert_types
         )
         
-    def forward(self, x, freq_emb=None):    
+    def forward(self, x, freq_emb=None, raw_physics_priors=None):    
         shortcut = x
         x = self.norms[0](x)
         
         x_s = self.proj[0](x)
         x_a = self.proj[1](x)
         x_s = self.shared(x_s)
-        x_a = self.adapter(x_a, freq_emb, x_s)
+        x_a = self.adapter(x_a, freq_emb, x_s, raw_physics_priors)
         x = self.mixer(x_a, x_s) + shortcut
 
         x = x + self.ffn(self.norms[1](x))
-        # 确保loss是有效的值，如果为None则返回0
-        loss = self.adapter.loss if self.adapter.loss is not None else 0.0
-        return x, loss
+        return x, self.adapter.loss
 
     
 
@@ -656,7 +1001,8 @@ class EncoderResidualGroup(nn.Module):
 class DecoderResidualGroup(nn.Module):
     def __init__(self, 
                  dim: int, num_heads: List[int], num_blocks: int, ffn_expansion: int, LayerNorm_type: str, bias: bool, complexity_scale=None,
-                 rank=None, num_experts=None, expert_layer=None, top_k=None, depth_type=None, stage_depth=None, rank_type=None, freq_dim:int=128, with_complexity: bool=False):
+                 rank=None, num_experts=None, expert_layer=None, top_k=None, depth_type=None, stage_depth=None, rank_type=None, freq_dim:int=128, 
+                 with_complexity: bool=False, use_physics_prior: bool=False, expert_types: List[str]=None):
         super().__init__()
 
         self.loss = None   
@@ -669,23 +1015,17 @@ class DecoderResidualGroup(nn.Module):
                     dim, num_heads, ffn_expansion, bias, LayerNorm_type, 
                     expert_layer=expert_layer, rank=rank, num_experts=num_experts, top_k=top_k, 
                     stage_depth=stage_depth, freq_dim=freq_dim, complexity_scale=complexity_scale,
-                    depth_type=depth_type, rank_type=rank_type, with_complexity=with_complexity
+                    depth_type=depth_type, rank_type=rank_type, with_complexity=with_complexity,
+                    use_physics_prior=use_physics_prior, expert_types=expert_types
                 )
             )
 
-    def forward(self, x, freq_emb=None):
+    def forward(self, x, freq_emb=None, raw_physics_priors=None):
         i = 0
         self.loss = 0
         while i < len(self.layers):
-            x , loss = self.layers[i](x, freq_emb)
-            # 确保loss是有效的数值
-            if loss is not None:
-                if torch.is_tensor(loss):
-                    if not torch.is_tensor(self.loss):
-                        self.loss = x.new_tensor(0.0)
-                    self.loss = self.loss + loss
-                elif isinstance(loss, (int, float)):
-                    self.loss = self.loss + loss
+            x , loss = self.layers[i](x, freq_emb, raw_physics_priors)
+            self.loss += loss
             i += 1
         return x  
     
@@ -775,79 +1115,8 @@ class SpatiallyVariantFreqEmbedding(nn.Module):
         combined = torch.cat(features, dim=1)
         out = self.fusion(combined)
         return out # 输出 (B, dim) 的频率嵌入
-
-
-##########################################################################
-## Contrastive Learning for Degradation Awareness
-class ContrastiveDegradationAwareness(nn.Module):
-    """
-    对比学习模块：学习退化感知表示
-    核心思想：同一病灶的不同退化版本在特征空间应该接近
-    """
-    def __init__(self, dim, temperature=0.07):
-        super().__init__()
-        self.temperature = temperature
-        
-        # 投影头：将特征投影到对比学习空间
-        self.projector = nn.Sequential(
-            nn.Linear(dim, dim * 2),
-            nn.GELU(),
-            nn.Linear(dim * 2, dim)
-        )
-        
-        # 退化强度估计器
-        self.degradation_estimator = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            Rearrange('b c 1 1 -> b c'),
-            nn.Linear(dim, dim // 2),
-            nn.GELU(),
-            nn.Linear(dim // 2, 1),
-            nn.Sigmoid()  # 输出退化强度[0,1]
-        )
-        
-    def forward(self, feat_clean, feat_degraded):
-        """
-        feat_clean: [B, C, H, W] - 相对清晰的图像特征
-        feat_degraded: [B, C, H, W] - 退化图像特征
-        返回：对比损失
-        """
-        B, C, H, W = feat_clean.shape
-        
-        # 全局池化
-        feat_clean_pool = F.adaptive_avg_pool2d(feat_clean, 1).squeeze(-1).squeeze(-1)  # [B, C]
-        feat_degraded_pool = F.adaptive_avg_pool2d(feat_degraded, 1).squeeze(-1).squeeze(-1)  # [B, C]
-        
-        # 投影到对比空间
-        z_clean = self.projector(feat_clean_pool)  # [B, C]
-        z_degraded = self.projector(feat_degraded_pool)  # [B, C]
-        
-        # L2归一化
-        z_clean = F.normalize(z_clean, dim=1)
-        z_degraded = F.normalize(z_degraded, dim=1)
-        
-        # 计算相似度矩阵
-        # 正样本：同一batch的clean-degraded对
-        pos_sim = (z_clean * z_degraded).sum(dim=1)  # [B]
-        
-        # 负样本：不同batch的样本
-        # 构建负样本对：clean与batch内其他degraded
-        neg_sim = torch.mm(z_clean, z_degraded.t())  # [B, B]
-        # 移除对角线（正样本）
-        mask = torch.eye(B, device=z_clean.device).bool()
-        neg_sim = neg_sim.masked_fill(mask, float('-inf'))
-        
-        # 对比损失：InfoNCE
-        logits = torch.cat([
-            pos_sim.unsqueeze(1),  # [B, 1] - 正样本
-            neg_sim  # [B, B-1] - 负样本（去除对角线）
-        ], dim=1) / self.temperature
-        
-        labels = torch.zeros(B, dtype=torch.long, device=z_clean.device)  # 正样本在位置0
-        loss = F.cross_entropy(logits, labels)
-        
-        return loss
-
-
+    
+    
 ##########################################################################
 ##
 class MoCEIR(nn.Module):
@@ -872,6 +1141,8 @@ class MoCEIR(nn.Module):
                 expert_layer=FFTAttention,
                 with_complexity=False,
                 complexity_scale="max",
+                use_physics_prior=False,
+                expert_types=None,
                 ):
         super(MoCEIR, self).__init__()
         
@@ -879,6 +1150,7 @@ class MoCEIR(nn.Module):
         self.num_blocks = num_blocks
         self.num_dec_blocks = num_dec_blocks
         self.num_refinement_blocks = num_refinement_blocks
+        self.use_physics_prior = use_physics_prior
         
         dims = [dim*2**i for i in range(levels)]
         ranks = [rank for i in range(levels-1)]
@@ -886,7 +1158,6 @@ class MoCEIR(nn.Module):
         # -- Patch Embedding
         self.patch_embed = OverlapPatchEmbed(in_c=inp_channels, embed_dim=dim, bias=False)
         self.freq_embed = SpatiallyVariantFreqEmbedding(dims[-1])
-        self.contrastive_module = ContrastiveDegradationAwareness(dims[-1])
                 
         # -- Encoder --        
         self.enc = nn.ModuleList([])
@@ -916,6 +1187,18 @@ class MoCEIR(nn.Module):
         heads = heads[::-1]
         num_dec_blocks = num_dec_blocks[::-1]
         
+        # 为每个decoder stage设置expert_types
+        if expert_types is None:
+            if use_physics_prior:
+                # 为不同stage设置不同的专家类型
+                expert_types_list = [
+                    ["depth_aware_deblurring", "spectral_chromatic_aberration_correction", "psf_guided_detail_restoration", "standard"],
+                ] * (levels - 1)
+            else:
+                expert_types_list = [None] * (levels - 1)
+        else:
+            expert_types_list = expert_types if isinstance(expert_types[0], list) else [expert_types] * (levels - 1)
+        
         self.dec = nn.ModuleList([])
         for i in range(levels-1):
             self.dec.append(nn.ModuleList([
@@ -927,7 +1210,8 @@ class MoCEIR(nn.Module):
                     num_heads=heads[i+1],
                     ffn_expansion=ffn_expansion_factor, 
                     LayerNorm_type=LayerNorm_type, bias=bias, expert_layer=expert_layer, freq_dim=dims[0], with_complexity=with_complexity,
-                    rank=ranks[i], num_experts=num_experts, stage_depth=stage_depth[i], depth_type=depth_type, rank_type=rank_type, top_k=topk, complexity_scale=complexity_scale),
+                    rank=ranks[i], num_experts=num_experts, stage_depth=stage_depth[i], depth_type=depth_type, rank_type=rank_type, top_k=topk, complexity_scale=complexity_scale,
+                    use_physics_prior=use_physics_prior, expert_types=expert_types_list[i] if use_physics_prior else None),
                 ])
             )
 
@@ -944,7 +1228,17 @@ class MoCEIR(nn.Module):
         self.total_loss = None
         self.last_freq_emb = None
     
-    def forward(self, x, labels=None):
+    def forward(self, x, labels=None, raw_physics_priors=None):
+        """
+        Args:
+            x: 输入图像 (B, C, H, W)
+            labels: 标签（可选）
+            raw_physics_priors: 物理先验字典，包含：
+                - "depth_map": (B, 1, H, W) 深度图
+                - "spectral_data": (B, C_spectral, H, W) 或 (B, C_spectral) 光谱数据
+                - "optical_params": (B, C_params) 光学参数
+        """
+        B, C, H, W = x.shape
                 
         feats = self.patch_embed(x)
         
@@ -959,29 +1253,43 @@ class MoCEIR(nn.Module):
         freq_emb = self.freq_embed(feats)
         self.last_freq_emb = freq_emb
         
-        # 【新增】对比学习（如果有配对数据）
-        if self.training and labels is not None:
-            # 检查labels是否是特征图（4维张量）
-            if torch.is_tensor(labels) and len(labels.shape) == 4:
-                # labels是清晰图像的特征图 [B, C, H, W]
-                contrastive_loss = self.contrastive_module(labels, feats)
-                self.total_loss += 0.1 * contrastive_loss  # 权重可调
-            # 如果labels不是特征图（比如是de_id），则跳过对比学习
-            # 可以在这里实现自监督对比学习，使用同一batch内的特征
-                
+        # 计算每个decoder stage的空间尺寸
+        current_H, current_W = H // (2 ** (self.levels - 1)), W // (2 ** (self.levels - 1))
+        
         for i, (upsample, fusion, block) in enumerate(self.dec):
             feats = upsample(feats)
             feats = fusion(torch.cat([feats, enc_feats.pop()], dim=1))
-            feats = block(feats, freq_emb)
-            # 安全地累加block.loss
-            block_loss = getattr(block, 'loss', None)
-            if block_loss is not None:
-                if torch.is_tensor(block_loss):
-                    if not torch.is_tensor(self.total_loss):
-                        self.total_loss = feats.new_tensor(float(self.total_loss))
-                    self.total_loss = self.total_loss + block_loss
-                elif isinstance(block_loss, (int, float)):
-                    self.total_loss = self.total_loss + block_loss
+            
+            # 更新当前stage的空间尺寸
+            current_H, current_W = current_H * 2, current_W * 2
+            
+            # 如果使用物理先验，需要调整物理先验的尺寸以匹配当前stage
+            adjusted_physics_priors = None
+            if self.use_physics_prior and raw_physics_priors is not None:
+                adjusted_physics_priors = {}
+                if "depth_map" in raw_physics_priors and raw_physics_priors["depth_map"] is not None:
+                    adjusted_physics_priors["depth_map"] = F.interpolate(
+                        raw_physics_priors["depth_map"], 
+                        size=(current_H, current_W), 
+                        mode='bilinear', 
+                        align_corners=False
+                    )
+                if "spectral_data" in raw_physics_priors and raw_physics_priors["spectral_data"] is not None:
+                    if raw_physics_priors["spectral_data"].dim() == 4:  # (B, C, H, W)
+                        adjusted_physics_priors["spectral_data"] = F.interpolate(
+                            raw_physics_priors["spectral_data"], 
+                            size=(current_H, current_W), 
+                            mode='bilinear', 
+                            align_corners=False
+                        )
+                    else:  # (B, C) - 全局向量，不需要调整
+                        adjusted_physics_priors["spectral_data"] = raw_physics_priors["spectral_data"]
+                if "optical_params" in raw_physics_priors and raw_physics_priors["optical_params"] is not None:
+                    # 光学参数是全局向量，不需要调整尺寸
+                    adjusted_physics_priors["optical_params"] = raw_physics_priors["optical_params"]
+            
+            feats = block(feats, freq_emb, adjusted_physics_priors)
+            self.total_loss += block.loss
 
         feats = self.refinement(feats)
         x = self.output(feats) + x
@@ -991,21 +1299,32 @@ class MoCEIR(nn.Module):
     
                     
     
-    
+
 if __name__ == "__main__":
     # test
     model = MoCEIR(rank=2, num_blocks=[4,6,6,8], num_dec_blocks=[2,4,4], levels=4, dim=48, num_refinement_blocks=4, 
                    with_complexity=True, complexity_scale="max", stage_depth=[1,1,1], depth_type="constant", rank_type="spread", 
-                   num_experts=4, topk=1, expert_layer=FFTAttention).cuda()
+                   num_experts=4, topk=1, expert_layer=FFTAttention, use_physics_prior=True).cuda()
 
     x = torch.randn(1, 3, 224, 224).cuda()
-    _ = model(x)
+    
+    # 测试物理先验输入
+    depth_map = torch.randn(1, 1, 224, 224).cuda()
+    spectral_data = torch.randn(1, 3, 224, 224).cuda()
+    optical_params = torch.randn(1, 16).cuda()
+    raw_physics_priors = {
+        "depth_map": depth_map,
+        "spectral_data": spectral_data,
+        "optical_params": optical_params
+    }
+    
+    _ = model(x, raw_physics_priors=raw_physics_priors)
     print(model.total_loss)
     # Memory usage  
     print('{:>16s} : {:<.3f} [M]'.format('Max Memery', torch.cuda.max_memory_allocated(torch.cuda.current_device())/1024**2))
   
     # FLOPS and PARAMS
-    flops = FlopCountAnalysis(model, (x))
+    flops = FlopCountAnalysis(model, (x,))
     print(flop_count_table(flops))
 
 
@@ -1023,6 +1342,8 @@ def build_model(opt):
     stage_depth = getattr(opt, 'stage_depth', [1, 1, 1])
     rank_type = getattr(opt, 'rank_type', 'spread')
     complexity_scale = getattr(opt, 'complexity_scale', 'max')
+    use_physics_prior = getattr(opt, 'use_physics_prior', False)
+    expert_types = getattr(opt, 'expert_types', None)
 
     return MoCEIR(
         dim=dim,
@@ -1039,5 +1360,6 @@ def build_model(opt):
         stage_depth=stage_depth,
         rank_type=rank_type,
         complexity_scale=complexity_scale,
+        use_physics_prior=use_physics_prior,
+        expert_types=expert_types,
     )
-

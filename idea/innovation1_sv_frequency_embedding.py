@@ -1,3 +1,19 @@
+"""
+创新点1: 空间变异频率诊断 (Spatially-Variant Frequency Diagnosis, SVFD)
+
+核心思想:
+- 超透镜的像差具有空间变异特性: 中心区域（近轴）退化较轻，边缘区域（远轴）退化严重
+- 通过多尺度局部池化显式建模空间变异，使用高通滤波器提取像差敏感的高频区域
+- 生成全局频率诊断嵌入，作为路由器的"诊断信号"
+
+论文表述:
+"Unlike conventional image restoration methods that assume spatially-uniform degradation, 
+we recognize that metalens aberrations exhibit spatially-variant characteristics due to 
+field curvature. We propose a Spatially-Variant Frequency Embedding (SVFE) module that 
+explicitly models the frequency distribution differences between central (paraxial) and 
+peripheral (off-axis) regions."
+"""
+
 from collections import OrderedDict
 from typing import Optional, List, Tuple
 
@@ -6,101 +22,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import math
-import random
 import numbers
-import numpy as np
 
 from einops import rearrange
 from einops.layers.torch import Rearrange
 from torch.distributions.normal import Normal
-from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
 ##########################################################################
 ## Helper functions
-def zero_module(module):
-    """
-    Zero out the parameters of a module and return it.
-    """
-    for p in module.parameters():
-        p.detach().zero_()
-    return module
-
 class MySequential(nn.Sequential):
     def forward(self, x1, x2):
-        # Iterate through all layers in sequential order
         for layer in self:
-            # Check if the layer takes two inputs (i.e., custom layers)
             if isinstance(layer, nn.Module):
-                # Pass both inputs to the layer
                 x1 = layer(x1, x2)
             else:
-                # For non-module layers, pass the two inputs directly
                 x1 = layer(x1, x2)
         return x1
 
-def softmax_with_temperature(logits, temperature=1.0):
-    """
-    Apply softmax with temperature to the logits.
-    
-    Args:
-    - logits (torch.Tensor): The input logits.
-    - temperature (float): The temperature factor.
-    
-    Returns:
-    - torch.Tensor: The softmax output with temperature.
-    """
-    # Scale the logits by the temperature
-    scaled_logits = logits / temperature
-    
-    # Apply softmax
-    return F.softmax(scaled_logits, dim=-1)
-
 class SparseDispatcher(object):
     def __init__(self, num_experts, gates):
-        """Create a SparseDispatcher."""
-
         self._gates = gates
         self._num_experts = num_experts
-        # sort experts
         sorted_experts, index_sorted_experts = torch.nonzero(gates).sort(0)
-        # drop indices
         _, self._expert_index = sorted_experts.split(1, dim=1)
-        # get according batch index for each expert
         self._batch_index = torch.nonzero(gates)[index_sorted_experts[:, 1], 0]
-        # calculate num samples that each expert gets
         self._part_sizes = (gates > 0).sum(0).tolist()
-        # expand gates to match with self._batch_index
         gates_exp = gates[self._batch_index.flatten()]
         self._nonzero_gates = torch.gather(gates_exp, 1, self._expert_index)
 
     def dispatch(self, inp):
-        """Create one input Tensor for each expert.
-        The `Tensor` for a expert `i` contains the slices of `inp` corresponding
-        to the batch elements `b` where `gates[b, i] > 0`.
-        """
-
-        # assigns samples to experts whose gate is nonzero
-
-        # expand according to batch index so we can just split by _part_sizes
         inp_exp = inp[self._batch_index].squeeze(1)
         return torch.split(inp_exp, self._part_sizes, dim=0)
 
     def combine(self, expert_out, multiply_by_gates=True):
-        """Sum together the expert output, weighted by the gates.
-        The slice corresponding to a particular batch element `b` is computed
-        as the sum over all experts `i` of the expert output, weighted by the
-        corresponding gate values.  If `multiply_by_gates` is set to False, the
-        gate values are ignored.
-        """
-        # apply exp to expert outputs, so we are not longer in log space
         stitched = torch.cat(expert_out, 0)
-
         if multiply_by_gates:
             stitched = stitched.mul(self._nonzero_gates.unsqueeze(-1).unsqueeze(-1))
-        # NOTE:
-        # - 这里每步分配一个 [B,C,H,W] 的大零张量是热点；不需要 requires_grad=True（梯度会从 stitched 反传）
-        # - 避免无条件 .float()，以便 AMP 下保持更快的 dtype（必要时会自动提升精度）
         zeros = torch.zeros(
             self._gates.size(0),
             stitched.size(1),
@@ -109,34 +67,17 @@ class SparseDispatcher(object):
             device=stitched.device,
             dtype=stitched.dtype,
         )
-        # combine samples that have been processed by the same k experts
         combined = zeros.index_add(0, self._batch_index, stitched)
         return combined
-    
-    def to_spatial(self, x, x_shape):
-        h, w = x_shape
-        amp, phase = x.chunk(2, dim=1)
-        real = amp * torch.cos(phase)
-        imag = amp * torch.sin(phase)
-        x = real + 1j * imag
-        x = torch.fft.ifft2(x, s=(h, w), norm="backward").real
-        return x
-
-    def expert_to_gates(self):
-        """Gate values corresponding to the examples in the per-expert `Tensor`s.
-        """
-        # split nonzero gates for each expert
-        return torch.split(self._nonzero_gates, self._part_sizes, dim=0)
 
 
 ##########################################################################
 ## Layer Norm
-
 def to_3d(x):
     return rearrange(x, 'b c h w -> b (h w) c')
 
-def to_4d(x,h,w):
-    return rearrange(x, 'b (h w) c -> b c h w',h=h,w=w)
+def to_4d(x, h, w):
+    return rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
 
 class BiasFree_LayerNorm(nn.Module):
     def __init__(self, normalized_shape):
@@ -144,9 +85,7 @@ class BiasFree_LayerNorm(nn.Module):
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape,)
         normalized_shape = torch.Size(normalized_shape)
-
         assert len(normalized_shape) == 1
-
         self.weight = nn.Parameter(torch.ones(normalized_shape))
         self.normalized_shape = normalized_shape
 
@@ -160,9 +99,7 @@ class WithBias_LayerNorm(nn.Module):
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape,)
         normalized_shape = torch.Size(normalized_shape)
-
         assert len(normalized_shape) == 1
-
         self.weight = nn.Parameter(torch.ones(normalized_shape))
         self.bias = nn.Parameter(torch.zeros(normalized_shape))
         self.normalized_shape = normalized_shape
@@ -176,7 +113,7 @@ class LayerNorm(nn.Module):
     def __init__(self, dim, LayerNorm_type):
         super(LayerNorm, self).__init__()
         self.dim = dim
-        if LayerNorm_type =='BiasFree':
+        if LayerNorm_type == 'BiasFree':
             self.body = BiasFree_LayerNorm(dim)
         else:
             self.body = WithBias_LayerNorm(dim)
@@ -186,9 +123,9 @@ class LayerNorm(nn.Module):
         return to_4d(self.body(to_3d(x)), h, w)
 
 class HighPassConv2d(nn.Module):
+    """高通滤波器: 提取高频细节（像差最敏感的部分）"""
     def __init__(self, c, freeze):
         super().__init__()
-        
         self.conv = nn.Conv2d(
             in_channels=c, 
             out_channels=c, 
@@ -197,12 +134,10 @@ class HighPassConv2d(nn.Module):
             bias=False, 
             groups=c
         )
-        
         kernel = torch.tensor([[[[-1, -1, -1],
                                  [-1, 8, -1],
                                  [-1, -1, -1]]]], dtype=torch.float32)
         self.conv.weight.data = kernel.repeat(c, 1, 1, 1)
-        
         if freeze:
             self.conv.requires_grad_ = False
         
@@ -211,11 +146,71 @@ class HighPassConv2d(nn.Module):
 
 
 ##########################################################################
-## Gated-Dconv Feed-Forward Network (GDFN)
+## 创新点1: 空间变异频率嵌入 (Spatially-Variant Frequency Embedding)
+class SpatiallyVariantFreqEmbedding(nn.Module):
+    """
+    空间变异频率嵌入模块
+    
+    核心机制:
+    1. 物理感知分支: 使用冻结的高通滤波器提取高频细节，这些区域对像差最敏感
+    2. 空间变异感知: 通过多尺度局部池化 (1×1, 2×2, 4×4) 捕捉"中心 vs 边缘"的频率分布差异
+    3. 特征融合: 将21个空间位置的特征拼接后通过MLP融合，生成全局频率诊断嵌入
+    
+    输出: (B, dim) 的频率嵌入，作为路由器的"诊断信号"
+    """
+    def __init__(self, dim):
+        super(SpatiallyVariantFreqEmbedding, self).__init__()
+        
+        # 1. 物理感知分支：高通滤波提取高频细节（像差最敏感的部分）
+        self.high_conv = nn.Sequential(
+            HighPassConv2d(dim, freeze=True),
+            nn.GELU()
+        )
+        
+        # 2. 空间变异感知：使用不同尺度的池化来捕捉局部频率分布
+        # 相比 GAP，这能保留"中心 vs 边缘"的特征差异
+        self.local_pools = nn.ModuleList([
+            nn.AdaptiveAvgPool2d(1),  # 全局信息 (1×1 = 1个位置)
+            nn.AdaptiveAvgPool2d(2),  # 2×2 区域信息（区分四个象限）(2×2 = 4个位置)
+            nn.AdaptiveAvgPool2d(4)   # 4×4 细粒度区域信息 (4×4 = 16个位置)
+        ])
+        
+        # 3. 特征融合 MLP
+        # 1*1 + 2*2 + 4*4 = 1 + 4 + 16 = 21 个空间位置
+        self.fusion = nn.Sequential(
+            nn.Linear(dim * 21, dim * 2),
+            nn.GELU(),
+            nn.Linear(dim * 2, dim)
+        )
+
+    def forward(self, x):
+        """
+        Args:
+            x: 来自 bottleneck 的特征 (B, C, H, W)
+        Returns:
+            out: 频率嵌入 (B, dim)
+        """
+        # 高通滤波提取高频细节
+        x = self.high_conv(x)
+        
+        # 提取多尺度局部特征
+        features = []
+        for pool in self.local_pools:
+            f = pool(x)  # (B, C, h_p, w_p)
+            f = f.flatten(1)  # (B, C * h_p * w_p)
+            features.append(f)
+        
+        # 拼接并融合
+        combined = torch.cat(features, dim=1)  # (B, C * 21)
+        out = self.fusion(combined)  # (B, dim)
+        return out
+
+
+##########################################################################
+## 基础模块 (用于构建完整网络)
 class FeedForward(nn.Module):
     def __init__(self, dim, ffn_expansion_factor, bias):
         super(FeedForward, self).__init__()
-
         hidden_features = int(dim*ffn_expansion_factor)
         self.project_in = nn.Conv2d(dim, hidden_features*2, kernel_size=1, bias=bias)
         self.dwconv = nn.Conv2d(hidden_features*2, hidden_features*2, kernel_size=3, stride=1, padding=1, groups=hidden_features*2, bias=bias)
@@ -227,48 +222,37 @@ class FeedForward(nn.Module):
         x = F.gelu(x1) * x2
         x = self.project_out(x)
         return x 
-    
-##########################################################################
-## Multi-DConv Head Transposed Self-Attention
+
 class Attention(nn.Module):
     def __init__(self, dim, num_heads, bias):
         super(Attention, self).__init__()
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
-
         self.qkv = nn.Conv2d(dim, dim*3, kernel_size=1, bias=bias)
         self.qkv_dwconv = nn.Conv2d(dim*3, dim*3, kernel_size=3, stride=1, padding=1, groups=dim*3, bias=bias)
         self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
-        b,c,h,w = x.shape
-
+        b, c, h, w = x.shape
         qkv = self.qkv_dwconv(self.qkv(x))
-        q,k,v = qkv.chunk(3, dim=1)   
-        
+        q, k, v = qkv.chunk(3, dim=1)   
         q = rearrange(q, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         k = rearrange(k, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         v = rearrange(v, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
-
         q = torch.nn.functional.normalize(q, dim=-1)
         k = torch.nn.functional.normalize(k, dim=-1)
-
         attn = (q @ k.transpose(-2, -1)) * self.temperature
         attn = attn.softmax(dim=-1)
-
         out = (attn @ v)
-        
         out = rearrange(out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=h, w=w)
-
         out = self.project_out(out)
         return out
-    
+
 class CrossAttention(nn.Module):
     def __init__(self, dim, num_heads, bias):
         super(CrossAttention, self).__init__()
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
-
         self.q = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
         self.q_dwconv = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1, groups=dim, bias=bias)
         self.kv = nn.Conv2d(dim, dim*2, kernel_size=1, bias=bias)
@@ -276,37 +260,26 @@ class CrossAttention(nn.Module):
         self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
         
     def forward(self, x, y):
-        b,c,h,w = x.shape
-
+        b, c, h, w = x.shape
         q = self.q_dwconv(self.q(x))
         kv = self.kv_dwconv(self.kv(y))
         k, v = kv.chunk(2, dim=1)
-        
         q = rearrange(q, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         k = rearrange(k, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         v = rearrange(v, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
-
         q = torch.nn.functional.normalize(q, dim=-1)
         k = torch.nn.functional.normalize(k, dim=-1)
-
         attn = (q @ k.transpose(-2, -1)) * self.temperature
         attn = attn.softmax(dim=-1)
-
         out = (attn @ v)
-        
         out = rearrange(out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=h, w=w)
-
         out = self.project_out(out)
         return out
-    
-##########################################################################
-## Self-Attention in Fourier Domain
+
 class FFTAttention(nn.Module):
     def __init__(self, dim: int, **kwargs):
         super(FFTAttention, self).__init__()
-
         self.patch_size = kwargs["patch_size"]
-        
         self.q = nn.Conv2d(dim, dim, kernel_size=1, bias=False)
         self.q_dwconv = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1, groups=dim)
         self.kv = nn.Conv2d(dim, dim*2, kernel_size=1, bias=False)
@@ -316,7 +289,6 @@ class FFTAttention(nn.Module):
         
     def pad_and_rearrange(self, x):
         b, c, h, w = x.shape
-        
         pad_h = (self.patch_size - (h % self.patch_size)) % self.patch_size
         pad_w = (self.patch_size - (w % self.patch_size)) % self.patch_size
         x = F.pad(x, (0, pad_w, 0, pad_h), mode='constant', value=0)
@@ -326,47 +298,35 @@ class FFTAttention(nn.Module):
     def rearrange_to_original(self, x, x_shape):
         h, w = x_shape
         x = rearrange(x, 'b c h w p1 p2 -> b c (h p1) (w p2)', p1=self.patch_size, p2=self.patch_size)
-        x = x[:, :, :h, :w]  # Slice out the original height and width
+        x = x[:, :, :h, :w]
         return x
 
     def forward(self, x):
         b, c, h, w = x.shape
-
         q = self.q_dwconv(self.q(x))
         kv = self.kv_dwconv(self.kv(x))
         k, v = kv.chunk(2, dim=1)
-            
         q = self.pad_and_rearrange(q)
         k = self.pad_and_rearrange(k)
-            
         q_fft = torch.fft.rfft2(q.float())
         k_fft = torch.fft.rfft2(k.float())
         out = q_fft * k_fft
         out = torch.fft.irfft2(out, s=(self.patch_size, self.patch_size))
-        
         out = self.rearrange_to_original(out, (h, w))
-        
         out = self.norm(out)
         out = out * v
-        
         out = self.proj_out(out)
         return out
 
-    
-     
-##########################################################################
-## Adapter Block    
 class ModExpert(nn.Module):
-    def __init__(self, dim: int, rank: int, func: nn.Module, depth: int, patch_size: int, kernel_size:int):
+    def __init__(self, dim: int, rank: int, func: nn.Module, depth: int, patch_size: int, kernel_size: int):
         super(ModExpert, self).__init__()
-        
         self.depth = depth
         self.proj = nn.ModuleList([
             nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
             nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
             nn.Conv2d(rank, dim, kernel_size=1, padding=0, bias=False)
         ])
-        
         self.body = func(rank, kernel_size=kernel_size, patch_size=patch_size)
             
     def process(self, x, shared):
@@ -383,17 +343,91 @@ class ModExpert(nn.Module):
     
     def forward(self, x, shared):
         b, c, h, w = x.shape
-        
         if b == 0:
             return x
         else:
             x = self.feat_extract(x, shared)
             return x
+
+
+##########################################################################
+## Routing Function (使用SV频率嵌入)
+class RoutingFunction(nn.Module):
+    def __init__(self, dim, freq_dim, num_experts, k, complexity, use_complexity_bias: bool = True, complexity_scale: str="max"):
+        super(RoutingFunction, self).__init__()
         
+        # 基础路由：图像特征和频率嵌入
+        self.gate = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            Rearrange('b c 1 1 -> b c'),
+            nn.Linear(dim, num_experts, bias=False)
+        ) 
+        self.freq_gate = nn.Linear(freq_dim, num_experts, bias=False)
+        
+        if complexity_scale == "min":
+            complexity = complexity / complexity.min()
+        elif complexity_scale == "max":
+            complexity = complexity / complexity.max()
+        self.register_buffer('complexity', complexity)
+        
+        self.k = k
+        self.tau = 1
+        self.num_experts = num_experts
+        self.noise_std = (1.0 / num_experts) * 1.0
+        self.use_complexity_bias = use_complexity_bias
+
+    def forward(self, x, freq_emb):
+        """
+        Args:
+            x: 图像特征 (B, C, H, W)
+            freq_emb: SV频率嵌入 (B, freq_dim) - 来自 SpatiallyVariantFreqEmbedding
+        """
+        # 标准路由：融合图像特征和频率嵌入
+        logits = self.gate(x) + self.freq_gate(freq_emb)
+        
+        if self.training:
+            loss_imp = self.importance_loss(logits.softmax(dim=-1))
+        
+        noise = torch.randn_like(logits) * self.noise_std
+        noisy_logits = logits + noise
+        gating_scores = noisy_logits.softmax(dim=-1)
+        top_k_values, top_k_indices = torch.topk(gating_scores, self.k, dim=-1)
+
+        if self.training:
+            loss_load = self.load_loss(logits, noisy_logits, self.noise_std)
+            aux_loss = 0.5 * loss_imp + 0.5 * loss_load
+        else:
+            aux_loss = 0
+        
+        gates = torch.zeros_like(logits).scatter_(1, top_k_indices, top_k_values.to(dtype=logits.dtype))
+        return gates, top_k_indices, top_k_values, aux_loss
+
+    def importance_loss(self, gating_scores):
+        importance = gating_scores.sum(dim=0)
+        importance = importance * (self.complexity * self.tau) if self.use_complexity_bias else importance
+        imp_mean = importance.mean()
+        imp_std = importance.std()
+        loss_imp = (imp_std / (imp_mean + 1e-8)) ** 2
+        return loss_imp
+
+    def load_loss(self, logits, logits_noisy, noise_std):
+        thresholds = torch.topk(logits_noisy, self.k, dim=-1).indices[:, -1]
+        threshold_per_item = torch.sum(
+            F.one_hot(thresholds, self.num_experts) * logits_noisy,
+            dim=-1
+        )
+        noise_required_to_win = threshold_per_item.unsqueeze(-1) - logits
+        noise_required_to_win /= noise_std
+        normal_dist = Normal(0, 1)
+        p = 1. - normal_dist.cdf(noise_required_to_win)
+        p_mean = p.mean(dim=0)
+        p_mean_std = p_mean.std()
+        p_mean_mean = p_mean.mean()
+        loss_load = (p_mean_std / (p_mean_mean + 1e-8)) ** 2
+        return loss_load
 
 
-
-########################################################################### 
+##########################################################################
 ## Adapter Layer
 class AdapterLayer(nn.Module):
     def __init__(self, 
@@ -407,7 +441,7 @@ class AdapterLayer(nn.Module):
         self.top_k = top_k
         self.noise_eps = 1e-2
         self.num_experts = num_experts
-
+        
         patch_sizes = [2**(i+2) for i in range(num_experts)]
         kernel_sizes = [3+(2*i) for i in range(num_experts)]
         
@@ -455,10 +489,15 @@ class AdapterLayer(nn.Module):
         )
         
     def forward(self, x, freq_emb, shared):
+        """
+        Args:
+            x: 图像特征 (B, C, H, W)
+            freq_emb: SV频率嵌入 (B, freq_dim) - 来自 SpatiallyVariantFreqEmbedding
+            shared: 共享特征 (B, C, H, W)
+        """
         gates, top_k_indices, top_k_values, aux_loss = self.routing(x, freq_emb)
         self.loss = aux_loss
                 
-        # routing
         if self.training:
             dispatcher = SparseDispatcher(self.num_experts, gates)
             expert_inputs = dispatcher.dispatch(x)
@@ -466,110 +505,25 @@ class AdapterLayer(nn.Module):
             expert_outputs = [self.experts[exp](expert_inputs[exp], expert_shared_intputs[exp]) for exp in range(len(self.experts))]
             out = dispatcher.combine(expert_outputs, multiply_by_gates=True)
         else:
-            selected_experts = [self.experts[i] for i in top_k_indices.squeeze(0)]  # Select the corresponding experts
+            selected_experts = [self.experts[i] for i in top_k_indices.squeeze(0)]
             expert_outputs = torch.stack([expert(x, shared) for expert in selected_experts], dim=1)
             gates = gates.gather(1, top_k_indices)  
             weighted_outputs = gates.unsqueeze(2).unsqueeze(3).unsqueeze(4) * expert_outputs 
-            out = weighted_outputs.sum(dim=1)  # Sum across the top-k dimension to get the final output
+            out = weighted_outputs.sum(dim=1)
             
         out = self.proj_out(out)
         return out
 
-    
-
-class RoutingFunction(nn.Module):
-    def __init__(self, dim, freq_dim, num_experts, k, complexity, use_complexity_bias: bool = True, complexity_scale: str="max"):
-        super(RoutingFunction, self).__init__()
-        
-        self.gate = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            Rearrange('b c 1 1 -> b c'),
-            nn.Linear(dim, num_experts, bias=False)
-        ) 
-        self.freq_gate = nn.Linear(freq_dim, num_experts, bias=False)
-        if complexity_scale == "min":
-            complexity = complexity / complexity.min()
-        elif complexity_scale == "max":
-            complexity = complexity / complexity.max()
-        self.register_buffer('complexity', complexity)
-        
-        self.k = k
-        self.tau = 1
-        self.num_experts = num_experts
-        self.noise_std = (1.0 / num_experts) * 1.0
-        self.use_complexity_bias = use_complexity_bias
-
-    def forward(self, x, freq_emb):
-        logits = self.gate(x) + self.freq_gate(freq_emb)
-        if self.training:
-            loss_imp = self.importance_loss(logits.softmax(dim=-1))
-        
-        noise = torch.randn_like(logits) * self.noise_std
-        noisy_logits = logits + noise
-        gating_scores = noisy_logits.softmax(dim=-1)
-        top_k_values, top_k_indices = torch.topk(gating_scores, self.k, dim=-1)
-
-        # Final auxiliary loss
-        if self.training:
-            loss_load = self.load_loss(logits, noisy_logits, self.noise_std)
-            aux_loss = 0.5 * loss_imp + 0.5 * loss_load
-        else:
-            aux_loss = 0
-        
-        # AMP 下 softmax/topk 的输出 dtype 可能与 logits 不一致，scatter_ 要求两者 dtype 相同
-        gates = torch.zeros_like(logits).scatter_(1, top_k_indices, top_k_values.to(dtype=logits.dtype))
-        return gates, top_k_indices, top_k_values, aux_loss
-
-    def importance_loss(self, gating_scores):
-        importance = gating_scores.sum(dim=0)
-        importance = importance * (self.complexity * self.tau) if self.use_complexity_bias else importance
-        imp_mean = importance.mean()
-        imp_std = importance.std()
-        loss_imp = (imp_std / (imp_mean + 1e-8)) ** 2
-        return loss_imp
-
-    def load_loss(self, logits, logits_noisy, noise_std):
-        # Compute the noise threshold
-        thresholds = torch.topk(logits_noisy, self.k, dim=-1).indices[:, -1]
-        
-        # Compute the load for each expert
-        threshold_per_item = torch.sum(
-            F.one_hot(thresholds, self.num_experts) * logits_noisy,
-            dim=-1
-        )
-        
-        # Calculate noise required to win
-        noise_required_to_win = threshold_per_item.unsqueeze(-1) - logits
-        noise_required_to_win /= noise_std
-        
-        # Probability of being above the threshold
-        normal_dist = Normal(0, 1)
-        p = 1. - normal_dist.cdf(noise_required_to_win)
-        
-        # Compute mean probability for each expert over examples
-        p_mean = p.mean(dim=0)
-        
-        # Compute p_mean's coefficient of variation squared
-        p_mean_std = p_mean.std()
-        p_mean_mean = p_mean.mean()
-        loss_load = (p_mean_std / (p_mean_mean + 1e-8)) ** 2
-        
-        return loss_load
-
-
-
 
 ##########################################################################
-## Encoder Block
+## Encoder/Decoder Blocks
 class EncoderBlock(nn.Module):
     def __init__(self, dim, num_heads, ffn_expansion_factor, bias, LayerNorm_type):
         super().__init__()
-        
         self.norms = nn.ModuleList([
           LayerNorm(dim, LayerNorm_type),
           LayerNorm(dim, LayerNorm_type)
         ])
-        
         self.mixer = Attention(dim, num_heads, bias)
         self.ffn = FeedForward(dim, ffn_expansion_factor, bias)
 
@@ -577,30 +531,23 @@ class EncoderBlock(nn.Module):
         x = x + self.mixer(self.norms[0](x))
         x = x + self.ffn(self.norms[1](x))
         return x
-        
 
-
-##########################################################################
-## Decoder Block
 class DecoderBlock(nn.Module):
     def __init__(self, dim, num_heads, ffn_expansion_factor, bias, LayerNorm_type, expert_layer, complexity_scale=None,
-                 rank=None, num_experts=None, top_k=None, depth_type=None, rank_type=None, stage_depth=None, freq_dim:int=128, with_complexity: bool=False):
+                 rank=None, num_experts=None, top_k=None, depth_type=None, rank_type=None, stage_depth=None, freq_dim:int=128, 
+                 with_complexity: bool=False):
         super().__init__()
-
         self.norms = nn.ModuleList([
           LayerNorm(dim, LayerNorm_type),
           LayerNorm(dim, LayerNorm_type),
         ])
-        
         self.proj = nn.ModuleList([
             nn.Conv2d(dim, dim, kernel_size=1, padding=0),
             nn.Conv2d(dim, dim, kernel_size=1, padding=0)
         ])
-        
         self.shared = Attention(dim, num_heads, bias)
         self.mixer = CrossAttention(dim, num_heads=num_heads, bias=bias)
         self.ffn = FeedForward(dim, ffn_expansion_factor, bias)
-        
         self.adapter = AdapterLayer(
             dim, rank, 
             top_k=top_k, num_experts=num_experts, expert_layer=expert_layer, freq_dim=freq_dim,
@@ -611,246 +558,93 @@ class DecoderBlock(nn.Module):
     def forward(self, x, freq_emb=None):    
         shortcut = x
         x = self.norms[0](x)
-        
         x_s = self.proj[0](x)
         x_a = self.proj[1](x)
         x_s = self.shared(x_s)
         x_a = self.adapter(x_a, freq_emb, x_s)
         x = self.mixer(x_a, x_s) + shortcut
-
         x = x + self.ffn(self.norms[1](x))
-        # 确保loss是有效的值，如果为None则返回0
-        loss = self.adapter.loss if self.adapter.loss is not None else 0.0
-        return x, loss
+        return x, self.adapter.loss
 
-    
-
-######################################################################
-## Encoder Residual Group
 class EncoderResidualGroup(nn.Module):
-    def __init__(self, 
-                 dim: int, num_heads: List[int], num_blocks: int, ffn_expansion: int, LayerNorm_type: str, bias: bool):
+    def __init__(self, dim: int, num_heads: List[int], num_blocks: int, ffn_expansion: int, LayerNorm_type: str, bias: bool):
         super().__init__()
-
         self.loss = None   
         self.num_blocks = num_blocks
-        
         self.layers = nn.ModuleList([])
         for i in range(num_blocks):
-            self.layers.append(
-                EncoderBlock(dim, num_heads, ffn_expansion, bias, LayerNorm_type)
-            )
+            self.layers.append(EncoderBlock(dim, num_heads, ffn_expansion, bias, LayerNorm_type))
 
     def forward(self, x):
-        i = 0
-        self.loss = 0
-        while i < len(self.layers):
-            x = self.layers[i](x)
-            i += 1
+        for layer in self.layers:
+            x = layer(x)
         return x    
-    
-    
-    
-######################################################################
-## Decoder Residual Group
+
 class DecoderResidualGroup(nn.Module):
     def __init__(self, 
                  dim: int, num_heads: List[int], num_blocks: int, ffn_expansion: int, LayerNorm_type: str, bias: bool, complexity_scale=None,
-                 rank=None, num_experts=None, expert_layer=None, top_k=None, depth_type=None, stage_depth=None, rank_type=None, freq_dim:int=128, with_complexity: bool=False):
+                 rank=None, num_experts=None, expert_layer=None, top_k=None, depth_type=None, stage_depth=None, rank_type=None, freq_dim:int=128, 
+                 with_complexity: bool=False):
         super().__init__()
-
         self.loss = None   
         self.num_blocks = num_blocks
-        
         self.layers = nn.ModuleList([])
         for i in range(num_blocks):
-            self.layers.append(
-                DecoderBlock(
-                    dim, num_heads, ffn_expansion, bias, LayerNorm_type, 
-                    expert_layer=expert_layer, rank=rank, num_experts=num_experts, top_k=top_k, 
-                    stage_depth=stage_depth, freq_dim=freq_dim, complexity_scale=complexity_scale,
-                    depth_type=depth_type, rank_type=rank_type, with_complexity=with_complexity
-                )
-            )
+            self.layers.append(DecoderBlock(
+                dim, num_heads, ffn_expansion, bias, LayerNorm_type, 
+                expert_layer=expert_layer, rank=rank, num_experts=num_experts, top_k=top_k, 
+                stage_depth=stage_depth, freq_dim=freq_dim, complexity_scale=complexity_scale,
+                depth_type=depth_type, rank_type=rank_type, with_complexity=with_complexity
+            ))
 
     def forward(self, x, freq_emb=None):
-        i = 0
         self.loss = 0
-        while i < len(self.layers):
-            x , loss = self.layers[i](x, freq_emb)
-            # 确保loss是有效的数值
-            if loss is not None:
-                if torch.is_tensor(loss):
-                    if not torch.is_tensor(self.loss):
-                        self.loss = x.new_tensor(0.0)
-                    self.loss = self.loss + loss
-                elif isinstance(loss, (int, float)):
-                    self.loss = self.loss + loss
-            i += 1
+        for layer in self.layers:
+            x, loss = layer(x, freq_emb)
+            self.loss += loss
         return x  
-    
-    
-     
+
+
 ##########################################################################
-## Overlapped image patch embedding with 3x3 Conv
+## Patch Embedding & Resizing
 class OverlapPatchEmbed(nn.Module):
     def __init__(self, in_c=3, embed_dim=48, bias=False):
         super(OverlapPatchEmbed, self).__init__()
-
         self.proj = nn.Conv2d(in_c, embed_dim, kernel_size=3, stride=1, padding=1, bias=bias)
 
     def forward(self, x):
         x = self.proj(x)
         return x
 
-
-
-##########################################################################
-## Resizing modules
 class Downsample(nn.Module):
     def __init__(self, n_feat):
         super(Downsample, self).__init__()
-
         self.body = nn.Sequential(nn.Conv2d(n_feat, n_feat//2, kernel_size=3, stride=1, padding=1, bias=False),
                                   nn.PixelUnshuffle(2))
 
     def forward(self, x):
         return self.body(x)
 
-
 class Upsample(nn.Module):
     def __init__(self, n_feat):
         super(Upsample, self).__init__()
-
         self.body = nn.Sequential(nn.Conv2d(n_feat, n_feat*2, kernel_size=3, stride=1, padding=1, bias=False),
                                   nn.PixelShuffle(2))
 
     def forward(self, x):
         return self.body(x)
-    
-    
-    
-##########################################################################
-## Spatially-Variant Frequency Embedding
-class SpatiallyVariantFreqEmbedding(nn.Module):
-    """
-    增强版频率嵌入：通过多尺度局部池化感知空间变异的频率特征
-    """
-    def __init__(self, dim):
-        super(SpatiallyVariantFreqEmbedding, self).__init__()
-        # 1. 物理感知分支：高通滤波提取高频细节（像差最敏感的部分）
-        self.high_conv = nn.Sequential(
-            HighPassConv2d(dim, freeze=True),
-            nn.GELU()
-        )
-        
-        # 2. 空间变异感知：使用不同尺度的池化来捕捉局部频率分布
-        # 相比 GAP，这能保留"中心 vs 边缘"的特征差异
-        self.local_pools = nn.ModuleList([
-            nn.AdaptiveAvgPool2d(1),  # 全局信息
-            nn.AdaptiveAvgPool2d(2),  # 2x2 区域信息（区分四个象限）
-            nn.AdaptiveAvgPool2d(4)   # 4x4 细粒度区域信息
-        ])
-        
-        # 3. 特征融合 MLP
-        # 1*1 + 2*2 + 4*4 = 21 个空间位置
-        self.fusion = nn.Sequential(
-            nn.Linear(dim * 21, dim * 2),
-            nn.GELU(),
-            nn.Linear(dim * 2, dim)
-        )
-
-    def forward(self, x):
-        # x: 来自 bottleneck 的特征 (B, C, H, W)
-        x = self.high_conv(x)
-        
-        # 提取多尺度局部特征
-        features = []
-        for pool in self.local_pools:
-            f = pool(x) # (B, C, h_p, w_p)
-            f = f.flatten(1) # (B, C * h_p * w_p)
-            features.append(f)
-        
-        # 拼接并融合
-        combined = torch.cat(features, dim=1)
-        out = self.fusion(combined)
-        return out # 输出 (B, dim) 的频率嵌入
 
 
 ##########################################################################
-## Contrastive Learning for Degradation Awareness
-class ContrastiveDegradationAwareness(nn.Module):
+## 完整网络: MoCE-IR with SV Frequency Embedding
+class MoCEIR_SV(nn.Module):
     """
-    对比学习模块：学习退化感知表示
-    核心思想：同一病灶的不同退化版本在特征空间应该接近
+    使用空间变异频率嵌入的MoCE-IR网络
+    
+    创新点: Spatially-Variant Frequency Embedding (SVFE)
+    - 从latent特征提取空间变异的频率嵌入
+    - 作为路由器的"诊断信号"，帮助路由器理解不同空间位置的退化模式
     """
-    def __init__(self, dim, temperature=0.07):
-        super().__init__()
-        self.temperature = temperature
-        
-        # 投影头：将特征投影到对比学习空间
-        self.projector = nn.Sequential(
-            nn.Linear(dim, dim * 2),
-            nn.GELU(),
-            nn.Linear(dim * 2, dim)
-        )
-        
-        # 退化强度估计器
-        self.degradation_estimator = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            Rearrange('b c 1 1 -> b c'),
-            nn.Linear(dim, dim // 2),
-            nn.GELU(),
-            nn.Linear(dim // 2, 1),
-            nn.Sigmoid()  # 输出退化强度[0,1]
-        )
-        
-    def forward(self, feat_clean, feat_degraded):
-        """
-        feat_clean: [B, C, H, W] - 相对清晰的图像特征
-        feat_degraded: [B, C, H, W] - 退化图像特征
-        返回：对比损失
-        """
-        B, C, H, W = feat_clean.shape
-        
-        # 全局池化
-        feat_clean_pool = F.adaptive_avg_pool2d(feat_clean, 1).squeeze(-1).squeeze(-1)  # [B, C]
-        feat_degraded_pool = F.adaptive_avg_pool2d(feat_degraded, 1).squeeze(-1).squeeze(-1)  # [B, C]
-        
-        # 投影到对比空间
-        z_clean = self.projector(feat_clean_pool)  # [B, C]
-        z_degraded = self.projector(feat_degraded_pool)  # [B, C]
-        
-        # L2归一化
-        z_clean = F.normalize(z_clean, dim=1)
-        z_degraded = F.normalize(z_degraded, dim=1)
-        
-        # 计算相似度矩阵
-        # 正样本：同一batch的clean-degraded对
-        pos_sim = (z_clean * z_degraded).sum(dim=1)  # [B]
-        
-        # 负样本：不同batch的样本
-        # 构建负样本对：clean与batch内其他degraded
-        neg_sim = torch.mm(z_clean, z_degraded.t())  # [B, B]
-        # 移除对角线（正样本）
-        mask = torch.eye(B, device=z_clean.device).bool()
-        neg_sim = neg_sim.masked_fill(mask, float('-inf'))
-        
-        # 对比损失：InfoNCE
-        logits = torch.cat([
-            pos_sim.unsqueeze(1),  # [B, 1] - 正样本
-            neg_sim  # [B, B-1] - 负样本（去除对角线）
-        ], dim=1) / self.temperature
-        
-        labels = torch.zeros(B, dtype=torch.long, device=z_clean.device)  # 正样本在位置0
-        loss = F.cross_entropy(logits, labels)
-        
-        return loss
-
-
-##########################################################################
-##
-class MoCEIR(nn.Module):
     def __init__(self,
                 inp_channels=3, 
                 out_channels=3, 
@@ -861,7 +655,7 @@ class MoCEIR(nn.Module):
                 num_dec_blocks = [1, 1, 1],
                 ffn_expansion_factor = 2,
                 num_refinement_blocks = 1,
-                LayerNorm_type = 'WithBias', ## Other option 'BiasFree'
+                LayerNorm_type = 'WithBias',
                 bias = False,
                 rank=2,
                 num_experts=4,
@@ -873,7 +667,7 @@ class MoCEIR(nn.Module):
                 with_complexity=False,
                 complexity_scale="max",
                 ):
-        super(MoCEIR, self).__init__()
+        super(MoCEIR_SV, self).__init__()
         
         self.levels = levels
         self.num_blocks = num_blocks
@@ -885,8 +679,9 @@ class MoCEIR(nn.Module):
 
         # -- Patch Embedding
         self.patch_embed = OverlapPatchEmbed(in_c=inp_channels, embed_dim=dim, bias=False)
+        
+        # -- 创新点1: 空间变异频率嵌入
         self.freq_embed = SpatiallyVariantFreqEmbedding(dims[-1])
-        self.contrastive_module = ContrastiveDegradationAwareness(dims[-1])
                 
         # -- Encoder --        
         self.enc = nn.ModuleList([])
@@ -945,6 +740,12 @@ class MoCEIR(nn.Module):
         self.last_freq_emb = None
     
     def forward(self, x, labels=None):
+        """
+        Args:
+            x: 输入图像 (B, C, H, W)
+            labels: 标签（可选）
+        """
+        B, C, H, W = x.shape
                 
         feats = self.patch_embed(x)
         
@@ -956,88 +757,53 @@ class MoCEIR(nn.Module):
             feats = downsample(feats)
         
         feats = self.latent(feats)
+        
+        # -- 创新点1: 从latent特征提取空间变异频率嵌入 --
         freq_emb = self.freq_embed(feats)
         self.last_freq_emb = freq_emb
         
-        # 【新增】对比学习（如果有配对数据）
-        if self.training and labels is not None:
-            # 检查labels是否是特征图（4维张量）
-            if torch.is_tensor(labels) and len(labels.shape) == 4:
-                # labels是清晰图像的特征图 [B, C, H, W]
-                contrastive_loss = self.contrastive_module(labels, feats)
-                self.total_loss += 0.1 * contrastive_loss  # 权重可调
-            # 如果labels不是特征图（比如是de_id），则跳过对比学习
-            # 可以在这里实现自监督对比学习，使用同一batch内的特征
-                
         for i, (upsample, fusion, block) in enumerate(self.dec):
             feats = upsample(feats)
             feats = fusion(torch.cat([feats, enc_feats.pop()], dim=1))
             feats = block(feats, freq_emb)
-            # 安全地累加block.loss
-            block_loss = getattr(block, 'loss', None)
-            if block_loss is not None:
-                if torch.is_tensor(block_loss):
-                    if not torch.is_tensor(self.total_loss):
-                        self.total_loss = feats.new_tensor(float(self.total_loss))
-                    self.total_loss = self.total_loss + block_loss
-                elif isinstance(block_loss, (int, float)):
-                    self.total_loss = self.total_loss + block_loss
+            self.total_loss += block.loss
 
         feats = self.refinement(feats)
         x = self.output(feats) + x
 
         self.total_loss /= sum(self.num_dec_blocks)
         return x
-    
-                    
-    
-    
+
+
 if __name__ == "__main__":
-    # test
-    model = MoCEIR(rank=2, num_blocks=[4,6,6,8], num_dec_blocks=[2,4,4], levels=4, dim=48, num_refinement_blocks=4, 
-                   with_complexity=True, complexity_scale="max", stage_depth=[1,1,1], depth_type="constant", rank_type="spread", 
-                   num_experts=4, topk=1, expert_layer=FFTAttention).cuda()
-
-    x = torch.randn(1, 3, 224, 224).cuda()
-    _ = model(x)
-    print(model.total_loss)
-    # Memory usage  
-    print('{:>16s} : {:<.3f} [M]'.format('Max Memery', torch.cuda.max_memory_allocated(torch.cuda.current_device())/1024**2))
-  
-    # FLOPS and PARAMS
-    flops = FlopCountAnalysis(model, (x))
-    print(flop_count_table(flops))
-
-
-def build_model(opt):
-    dim = getattr(opt, 'dim', 32)
-    num_blocks = getattr(opt, 'num_blocks', [4, 6, 6, 8])
-    num_dec_blocks = getattr(opt, 'num_dec_blocks', [2, 4, 4])
-    heads = getattr(opt, 'heads', [1, 2, 4, 8])
-    num_refinement_blocks = getattr(opt, 'num_refinement_blocks', 4)
-    topk = getattr(opt, 'topk', 1)
-    num_experts = getattr(opt, 'num_exp_blocks', 4)
-    rank = getattr(opt, 'latent_dim', 2)
-    with_complexity = getattr(opt, 'with_complexity', False)
-    depth_type = getattr(opt, 'depth_type', 'constant')
-    stage_depth = getattr(opt, 'stage_depth', [1, 1, 1])
-    rank_type = getattr(opt, 'rank_type', 'spread')
-    complexity_scale = getattr(opt, 'complexity_scale', 'max')
-
-    return MoCEIR(
-        dim=dim,
-        num_blocks=num_blocks,
-        num_dec_blocks=num_dec_blocks,
-        levels=len(num_blocks),
-        heads=heads,
-        num_refinement_blocks=num_refinement_blocks,
-        topk=topk,
-        num_experts=num_experts,
-        rank=rank,
-        with_complexity=with_complexity,
-        depth_type=depth_type,
-        stage_depth=stage_depth,
-        rank_type=rank_type,
-        complexity_scale=complexity_scale,
+    # 测试代码
+    model = MoCEIR_SV(
+        rank=2, 
+        num_blocks=[4,6,6,8], 
+        num_dec_blocks=[2,4,4], 
+        levels=4, 
+        dim=48, 
+        num_refinement_blocks=4, 
+        with_complexity=True, 
+        complexity_scale="max", 
+        stage_depth=[1,1,1], 
+        depth_type="constant", 
+        rank_type="spread", 
+        num_experts=4, 
+        topk=1, 
+        expert_layer=FFTAttention
     )
+    
+    if torch.cuda.is_available():
+        model = model.cuda()
+        x = torch.randn(1, 3, 224, 224).cuda()
+    else:
+        x = torch.randn(1, 3, 224, 224)
+    
+    output = model(x)
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {output.shape}")
+    print(f"Frequency embedding shape: {model.last_freq_emb.shape}")
+    print(f"Total loss: {model.total_loss}")
+    print("创新点1: SV频率嵌入网络测试成功!")
 

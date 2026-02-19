@@ -5,8 +5,8 @@ import pathlib
 # 基础训练设置
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
-MODEL = "MoCE_IR_S_SV_MultiScale"
-EPOCHS = 250
+MODEL = "MoCE_IR_S_SV_PhysicsPriorFusion_SDE_DTAR"
+EPOCHS = 350
 BATCH_SIZE = 32  # 每个GPU的batch size 20
 VAL_EVERY_N_EPOCH = 20  # 每多少个epoch做一次验证
 LR = 2e-4

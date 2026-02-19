@@ -17,7 +17,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 加载 Bark 推送通知功能（用于验证失败时发送通知）
 # 注意：每个 train.sh 会自己 source bark_notify.sh，所以训练完成后会正常发送通知
+# 在 train_multiple_models.sh 中，我们禁用自动的 EXIT trap，避免重复发送通知
 source "$SCRIPT_DIR/bark_notify.sh" 2>/dev/null || true
+# 禁用自动的 EXIT trap，避免在验证阶段发送不必要的通知
+# train.sh 会自己注册 trap，所以训练完成后会正常发送通知
+trap - EXIT 2>/dev/null || true
 
 # 设置环境变量来抑制 PyTorch 分布式警告
 export NCCL_DEBUG=ERROR
@@ -31,12 +35,12 @@ export OMP_NUM_THREADS=1
 # 在这里列出要训练的所有网络名称（去掉.py扩展名）
 # 网络文件应该在 net/ 目录下
 MODEL_LIST=(
-  "MoCE_IR_S_SV_CrossScaleFreq"
-  "MoCE_IR_S_SV_MultiScale"
-  "MoCE_IR_S_SV_Retinex"
-  "MoCE_IR_S_SV_Deform"
-  "MoCE_IR_S_SV_Diffusion"
-  "MoCE_IR_S_SV_Contrast"
+  # "MoCE_IR_S_SV_CrossScaleFreq"
+  # "MoCE_IR_S_SV_MultiScale"
+  # "MoCE_IR_S_SV_Retinex"
+  # "MoCE_IR_S_SV_Deform"
+  # "MoCE_IR_S_SV_Diffusion"
+  # "MoCE_IR_S_SV_Contrast"
   # 可以添加更多网络，例如：
   # "MoCE_IR_S"
   # "MoCE_IR"
@@ -47,6 +51,15 @@ MODEL_LIST=(
   # "MoCE_IR_Spectral"
   # "MoCE_IR_Spectral_S"
   # "MoCE_IR_PhysRouting"
+  #"MoCE_IR_S_SV_PhysicsPriorFusion_CCRDWR"
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_CGM_CR_EI"
+  # #"MoCE_IR_S_SV_PhysicsPriorFusion_HR_SEA_DLB"
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_DEPKD_CR"
+  # #"MoCE_IR_S_SV_PhysicsPriorFusion_HMSE_CEA"
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_FASE_DRR"
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_HEC_AG"
+  "MoCE_IR_S_SV_PhysicsPriorFusion_NOE_AIPR"  # 创新点3: 基于神经算子专家与自适应逆问题路由（NOE-AIPR）
+  "MoCE_IR_S_SV_PhysicsPriorFusion_SDE_DTAR"  # 创新点3: 基于谱域解耦专家与动态拓扑感知路由（SDE-DTAR）
 )
 
 # 切换到脚本所在目录
@@ -316,10 +329,8 @@ for model in "${VALID_MODELS[@]}"; do
     FAILED_MODELS+=("$model")
     echo ""
     echo "❌ 模型 $model 验证失败"
-    # 发送验证失败通知
-    if command -v bark_notify &> /dev/null; then
-      bark_notify "失败" "模型 $model 验证未通过"
-    fi
+    # 注意：验证失败时不发送通知，因为这只是验证阶段，不是训练失败
+    # 训练失败的通知会由 train.sh 自动发送
   fi
   
   echo ""
@@ -348,10 +359,8 @@ fi
 
 if [ ${#VERIFIED_MODELS[@]} -eq 0 ]; then
   echo "错误: 没有模型通过验证！无法开始训练。"
-  # 发送通知
-  if command -v bark_notify &> /dev/null; then
-    bark_notify "失败" "所有模型验证未通过，无法开始训练"
-  fi
+  # 注意：所有模型验证失败时不发送通知，因为这只是验证阶段
+  # 如果需要通知，可以手动发送，但通常不需要
   exit 1
 fi
 

@@ -369,12 +369,12 @@ class ModExpert(nn.Module):
             self.proj = None
         else:
             # 标准专家：原有逻辑
-            self.proj = nn.ModuleList([
-                nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
-                nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
-                nn.Conv2d(rank, dim, kernel_size=1, padding=0, bias=False)
-            ])
-            self.body = func(rank, kernel_size=kernel_size, patch_size=patch_size)
+        self.proj = nn.ModuleList([
+            nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(dim, rank, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(rank, dim, kernel_size=1, padding=0, bias=False)
+        ])
+        self.body = func(rank, kernel_size=kernel_size, patch_size=patch_size)
             
     def process(self, x, shared):
         shortcut = x
@@ -779,8 +779,8 @@ class SpatiallyVariantFreqEmbedding(nn.Module):
         combined = torch.cat(features, dim=1)
         out = self.fusion(combined)
         return out # 输出 (B, dim) 的频率嵌入
-
-
+    
+    
 ##########################################################################
 ## Deformable Convolution Expert
 class DeformableConvExpert(nn.Module):

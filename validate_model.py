@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 导入配置和模型
 import config
+import importlib
 from options import train_options
-from net.MoCE_IR_S_SV_CrossScaleFreq import build_model
 
 # 抑制警告以便更清晰地看到错误
 warnings.filterwarnings('error', category=UserWarning)
@@ -66,8 +66,17 @@ class ModelValidator:
             # 创建配置对象
             opt = train_options()
             
-            # 构建模型
-            model = build_model(opt)
+            # 动态导入并构建模型
+            model_name = getattr(opt, "model", None)
+            if not model_name:
+                raise ValueError("opt.model 未设置，请在 config.py 中设置 MODEL")
+            
+            module = importlib.import_module(f"net.{model_name}")
+            build_fn = getattr(module, "build_model", None)
+            if build_fn is None:
+                raise AttributeError(f"net.{model_name} 缺少 build_model 函数")
+            
+            model = build_fn(opt)
             model = model.to(self.device)
             model.train()  # 设置为训练模式
             
@@ -99,6 +108,16 @@ class ModelValidator:
             
             with torch.no_grad():
                 output = model(x)
+            
+            # 处理模型可能返回元组的情况（output, loss）
+            if isinstance(output, (tuple, list)):
+                if len(output) == 0:
+                    raise ValueError("模型返回空元组/列表")
+                output = output[0]  # 取第一个元素作为输出
+            
+            # 检查输出是否为tensor
+            if not isinstance(output, torch.Tensor):
+                raise ValueError(f"模型输出不是tensor，而是 {type(output)}")
             
             # 检查输出形状
             if output.shape != x.shape:
@@ -147,6 +166,13 @@ class ModelValidator:
                     with torch.no_grad():
                         output = model(x)
                     
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                    
+                    if not isinstance(output, torch.Tensor):
+                        raise ValueError(f"尺寸 {size}: 输出不是tensor，而是 {type(output)}")
+                    
                     if output.shape[:2] != x.shape[:2] or output.shape[2:] != x.shape[2:]:
                         raise ValueError(f"尺寸 {size}: 输出形状 {output.shape} 不匹配输入 {x.shape}")
                     
@@ -179,6 +205,13 @@ class ModelValidator:
                     
                     # 前向传播
                     output = model(x)
+                    
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                    
+                    if not isinstance(output, torch.Tensor):
+                        raise ValueError(f"batch_size={batch_size}: 输出不是tensor")
                     
                     # 计算损失
                     loss = F.mse_loss(output, target)
@@ -257,6 +290,11 @@ class ModelValidator:
                     # 使用autocast进行混合精度前向传播
                     with autocast():
                         output = model(x)
+                        # 处理模型可能返回元组的情况
+                        if isinstance(output, (tuple, list)) and len(output) > 0:
+                            output = output[0]
+                        if not isinstance(output, torch.Tensor):
+                            raise ValueError(f"batch={batch_size}, size={h}x{w}: 输出不是tensor")
                         loss = F.mse_loss(output, target)
                     
                     # 检查输出是否有效
@@ -325,13 +363,21 @@ class ModelValidator:
                     # 测试fp32
                     with torch.no_grad():
                         output_fp32 = model(x.float())
+                        # 处理模型可能返回元组的情况
+                        if isinstance(output_fp32, (tuple, list)) and len(output_fp32) > 0:
+                            output_fp32 = output_fp32[0]
                     
                     # 测试fp16（如果支持）
                     if torch.cuda.is_available():
                         with torch.no_grad(), autocast():
                             output_fp16 = model(x.half())
+                            # 处理模型可能返回元组的情况
+                            if isinstance(output_fp16, (tuple, list)) and len(output_fp16) > 0:
+                                output_fp16 = output_fp16[0]
                         
                         # 检查fp16输出是否有效
+                        if not isinstance(output_fp16, torch.Tensor):
+                            raise ValueError(f"尺寸 {size}: FP16输出不是tensor")
                         if torch.isnan(output_fp16).any():
                             raise ValueError(f"尺寸 {size}: FP16 FFT产生NaN")
                         if torch.isinf(output_fp16).any():
@@ -409,6 +455,11 @@ class ModelValidator:
                 x = torch.zeros(1, 3, 128, 128, device=self.device)
                 with torch.no_grad():
                     output = model(x)
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                if not isinstance(output, torch.Tensor):
+                    raise ValueError("全零输入输出不是tensor")
                 if torch.isnan(output).any() or torch.isinf(output).any():
                     raise ValueError("全零输入产生NaN或Inf")
                 print(f"    ✓ 全零输入: 正常")
@@ -420,6 +471,11 @@ class ModelValidator:
                 x = torch.ones(1, 3, 128, 128, device=self.device)
                 with torch.no_grad():
                     output = model(x)
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                if not isinstance(output, torch.Tensor):
+                    raise ValueError("全一输入输出不是tensor")
                 if torch.isnan(output).any() or torch.isinf(output).any():
                     raise ValueError("全一输入产生NaN或Inf")
                 print(f"    ✓ 全一输入: 正常")
@@ -431,10 +487,16 @@ class ModelValidator:
                 x = torch.ones(1, 3, 128, 128, device=self.device) * 100.0
                 with torch.no_grad():
                     output = model(x)
-                if torch.isnan(output).any() or torch.isinf(output).any():
-                    self.log_warning(test_name, "极大值输入产生NaN或Inf（可能正常）")
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                if isinstance(output, torch.Tensor):
+                    if torch.isnan(output).any() or torch.isinf(output).any():
+                        self.log_warning(test_name, "极大值输入产生NaN或Inf（可能正常）")
+                    else:
+                        print(f"    ✓ 极大值输入: 正常")
                 else:
-                    print(f"    ✓ 极大值输入: 正常")
+                    self.log_warning(test_name, f"极大值输入输出不是tensor: {type(output)}")
             except Exception as e:
                 self.log_warning(test_name, f"极大值输入异常: {str(e)}（可能正常）")
             
@@ -443,6 +505,11 @@ class ModelValidator:
                 x = torch.ones(1, 3, 128, 128, device=self.device) * 0.001
                 with torch.no_grad():
                     output = model(x)
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
+                if not isinstance(output, torch.Tensor):
+                    raise ValueError("极小值输入输出不是tensor")
                 if torch.isnan(output).any() or torch.isinf(output).any():
                     raise ValueError("极小值输入产生NaN或Inf")
                 print(f"    ✓ 极小值输入: 正常")
@@ -454,6 +521,9 @@ class ModelValidator:
                 x = torch.randn(1, 3, 128, 160, device=self.device)
                 with torch.no_grad():
                     output = model(x)
+                    # 处理模型可能返回元组的情况
+                    if isinstance(output, (tuple, list)) and len(output) > 0:
+                        output = output[0]
                 print(f"    ✓ 非方形输入 (128x160): 正常")
             except Exception as e:
                 self.log_warning(test_name, f"非方形输入可能不支持: {str(e)}")
@@ -492,6 +562,11 @@ class ModelValidator:
                     if scaler is not None:
                         with autocast():
                             output = model(x)
+                            # 处理模型可能返回元组的情况
+                            if isinstance(output, (tuple, list)) and len(output) > 0:
+                                output = output[0]
+                            if not isinstance(output, torch.Tensor):
+                                raise ValueError(f"步骤 {step+1}: 输出不是tensor")
                             loss = F.mse_loss(output, target)
                         
                         # 反向传播
@@ -513,6 +588,11 @@ class ModelValidator:
                         scaler.update()
                     else:
                         output = model(x)
+                        # 处理模型可能返回元组的情况
+                        if isinstance(output, (tuple, list)) and len(output) > 0:
+                            output = output[0]
+                        if not isinstance(output, torch.Tensor):
+                            raise ValueError(f"步骤 {step+1}: 输出不是tensor")
                         loss = F.mse_loss(output, target)
                         loss.backward()
                         optimizer.step()
@@ -544,6 +624,13 @@ class ModelValidator:
             
             with torch.no_grad():
                 output = model(x)
+            
+            # 处理模型可能返回元组的情况
+            if isinstance(output, (tuple, list)) and len(output) > 0:
+                output = output[0]
+            
+            if not isinstance(output, torch.Tensor):
+                raise ValueError(f"评估模式输出不是tensor，而是 {type(output)}")
             
             if output.shape != x.shape:
                 raise ValueError(f"评估模式输出形状不匹配: {output.shape} vs {x.shape}")
