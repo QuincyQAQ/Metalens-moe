@@ -1011,6 +1011,8 @@ def main(opt):
         val_opt.benchmarks = ["gopro"]
         # 验证集显式使用 val split，避免使用 test 数据做验证
         setattr(val_opt, "split", "val")
+        # 设置全分辨率评估
+        setattr(val_opt, "full_res_eval", True)
         valset = IRBenchmarks(val_opt)
         val_loader = DataLoader(
             valset,
@@ -1306,6 +1308,8 @@ def main(opt):
             test_opt.benchmarks = ["gopro"]
             # 测试集显式使用 test split
             setattr(test_opt, "split", "test")
+            # 设置全分辨率评估
+            setattr(test_opt, "full_res_eval", True)
             
             # 关键修复：直接使用 opt.data_file_dir，因为它已经指向当前训练的数据集
             # 当使用 MOCEIR_TRAIN_DATA_FILE_DIR 时，opt.data_file_dir 已经设置为当前数据集

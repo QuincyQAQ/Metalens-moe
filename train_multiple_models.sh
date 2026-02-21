@@ -44,13 +44,13 @@ MODEL_LIST=(
   # 可以添加更多网络，例如：
   # "MoCE_IR_S"
   # "MoCE_IR"
-  # "MoCE_IR_S_Enhanced"
-  # "MoCE_IR_S_PhysGate"
-  # "MoCE_IR_S_SpecSpatial"
-  # "MoCE_IR_S_Wavelet"
-  # "MoCE_IR_Spectral"
-  # "MoCE_IR_Spectral_S"
-  # "MoCE_IR_PhysRouting"
+   "MoCE_IR_S_Enhanced"
+   "MoCE_IR_S_PhysGate"
+   "MoCE_IR_S_SpecSpatial"
+   "MoCE_IR_S_Wavelet"
+   "MoCE_IR_Spectral"
+   "MoCE_IR_Spectral_S"
+   "MoCE_IR_PhysRouting"
   #"MoCE_IR_S_SV_PhysicsPriorFusion_CCRDWR"
   # "MoCE_IR_S_SV_PhysicsPriorFusion_CGM_CR_EI"
   # #"MoCE_IR_S_SV_PhysicsPriorFusion_HR_SEA_DLB"
@@ -58,8 +58,9 @@ MODEL_LIST=(
   # #"MoCE_IR_S_SV_PhysicsPriorFusion_HMSE_CEA"
   # "MoCE_IR_S_SV_PhysicsPriorFusion_FASE_DRR"
   # "MoCE_IR_S_SV_PhysicsPriorFusion_HEC_AG"
-  "MoCE_IR_S_SV_PhysicsPriorFusion_NOE_AIPR"  # 创新点3: 基于神经算子专家与自适应逆问题路由（NOE-AIPR）
-  "MoCE_IR_S_SV_PhysicsPriorFusion_SDE_DTAR"  # 创新点3: 基于谱域解耦专家与动态拓扑感知路由（SDE-DTAR）
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_NOE_AIPR"  # 创新点3: 基于神经算子专家与自适应逆问题路由（NOE-AIPR）
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_AIPR_noFNO"  # 消融: 仅保留AIPR路由，关闭FNO/NOE专家
+  # "MoCE_IR_S_SV_PhysicsPriorFusion_PTAR"  # 创新点3: 物理拓扑感知路由（PTAR）
 )
 
 # 切换到脚本所在目录
@@ -362,6 +363,17 @@ if [ ${#VERIFIED_MODELS[@]} -eq 0 ]; then
   # 注意：所有模型验证失败时不发送通知，因为这只是验证阶段
   # 如果需要通知，可以手动发送，但通常不需要
   exit 1
+fi
+
+# ============================================================================
+# 可选：仅验证，不训练（用于快速自检）
+#   使用方法：MOCEIR_VALIDATE_ONLY=1 bash train_multiple_models.sh
+# ============================================================================
+if [ "${MOCEIR_VALIDATE_ONLY:-0}" = "1" ]; then
+  echo "=========================================="
+  echo "已设置 MOCEIR_VALIDATE_ONLY=1，仅验证模型，不进入训练阶段。"
+  echo "=========================================="
+  exit 0
 fi
 
 # ============================================================================
