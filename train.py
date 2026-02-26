@@ -27,7 +27,9 @@ from torch.utils.tensorboard import SummaryWriter
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs, set_seed
 from skimage.metrics import structural_similarity, peak_signal_noise_ratio
+from skimage.util import img_as_ubyte
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.functional import structural_similarity_index_measure
 
 from options import train_options
 from utils.schedulers import LinearWarmupCosineAnnealingLR
@@ -768,15 +770,23 @@ def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torc
             lpips_val = calc_lpips(clean_patch, restored)
             lpips_vals.append(float(lpips_val.detach().cpu()))
 
+            # 转为 numpy，并在 CPU 上转换为 uint8 后再计算 PSNR / SSIM
             restored_np = restored.detach().cpu().permute(0, 2, 3, 1).numpy()
             clean_np = clean_patch.detach().cpu().permute(0, 2, 3, 1).numpy()
 
-            for i in range(restored_np.shape[0]):
-                psnr_vals.append(float(peak_signal_noise_ratio(clean_np[i], restored_np[i], data_range=1.0)))
+            restored_uint8 = img_as_ubyte(restored_np)
+            clean_uint8 = img_as_ubyte(clean_np)
+
+            for i in range(restored_uint8.shape[0]):
+                psnr_vals.append(float(peak_signal_noise_ratio(
+                    clean_uint8[i],
+                    restored_uint8[i],
+                    data_range=255,
+                )))
                 ssim_vals.append(float(structural_similarity(
-                    clean_np[i],
-                    restored_np[i],
-                    data_range=1.0,
+                    clean_uint8[i],
+                    restored_uint8[i],
+                    data_range=255,
                     channel_axis=2,
                     gaussian_weights=True,
                 )))
@@ -1072,6 +1082,17 @@ def main(opt):
             epsilon=float(getattr(opt, "focal_epsilon", getattr(opt, "FOCAL_EPSILON", 1e-6))),
             alpha=float(getattr(opt, "focal_alpha", getattr(opt, "FOCAL_ALPHA", 0.1))),
         )
+    elif loss_type in ("rga", "mse_ssim", "mse-ssim"):
+        # RGA-Net 风格的损失: MSE + 0.2 * (1 - SSIM)
+        mse_loss = nn.MSELoss()
+
+        def _rga_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+            # 假设输入为 [0, 1] 归一化图像
+            mse = mse_loss(pred, target)
+            ssim_val = structural_similarity_index_measure(pred, target, data_range=1.0)
+            return mse + 0.2 * (1.0 - ssim_val)
+
+        loss_fn = _rga_loss
 
     best_val_psnr = None
     best_joint_psnr = None

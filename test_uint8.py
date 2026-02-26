@@ -736,9 +736,9 @@ def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
                 clean_patch = clean_padded[:, :, :h, :w]
             else:
                 # 原始：整图一次性前向，不做 patch 拼接
-                restored = _forward_model(net, degrad_patch, de_id)
-                if isinstance(restored, (list, tuple)) and len(restored) == 2:
-                    restored, _ = restored
+            restored = _forward_model(net, degrad_patch, de_id)
+            if isinstance(restored, (list, tuple)) and len(restored) == 2:
+                restored, _ = restored
             
             # Unpad images to original dimensions / consistency check
             assert restored.shape == clean_patch.shape, "Restored and clean patch shape mismatch."

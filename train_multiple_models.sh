@@ -44,23 +44,15 @@ MODEL_LIST=(
   # 可以添加更多网络，例如：
   # "MoCE_IR_S"
   # "MoCE_IR"
-   "MoCE_IR_S_Enhanced"
-   "MoCE_IR_S_PhysGate"
-   "MoCE_IR_S_SpecSpatial"
-   "MoCE_IR_S_Wavelet"
-   "MoCE_IR_Spectral"
-   "MoCE_IR_Spectral_S"
-   "MoCE_IR_PhysRouting"
-  #"MoCE_IR_S_SV_PhysicsPriorFusion_CCRDWR"
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_CGM_CR_EI"
-  # #"MoCE_IR_S_SV_PhysicsPriorFusion_HR_SEA_DLB"
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_DEPKD_CR"
-  # #"MoCE_IR_S_SV_PhysicsPriorFusion_HMSE_CEA"
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_FASE_DRR"
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_HEC_AG"
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_NOE_AIPR"  # 创新点3: 基于神经算子专家与自适应逆问题路由（NOE-AIPR）
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_AIPR_noFNO"  # 消融: 仅保留AIPR路由，关闭FNO/NOE专家
-  # "MoCE_IR_S_SV_PhysicsPriorFusion_PTAR"  # 创新点3: 物理拓扑感知路由（PTAR）
+  #  "MoCE_IR_S_Enhanced"
+  #  "MoCE_IR_S_PhysGate"
+  #  "MoCE_IR_S_SpecSpatial"
+  #  "MoCE_IR_S_Wavelet"
+  #  "MoCE_IR_Spectral"
+  #  "MoCE_IR_Spectral_S"
+#  "MoCE_IR_PhysRouting"
+   #"MoCE_IR_S_PG_GSSE"
+   "MoCE_IR_S_PADG_LKE"
 )
 
 # 切换到脚本所在目录

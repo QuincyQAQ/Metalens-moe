@@ -29,18 +29,18 @@ else
   else
     export MOCEIR_TEST_CKPT_PATH="${CKPT_CVC}"
     export MOCEIR_TEST_DATA_FILE_DIR="${DATA_CVC}"
-    export MOCEIR_TEST_TRAINSET="standard"
-    export MOCEIR_TEST_BENCHMARKS="gopro"
-    export MOCEIR_TEST_DE_TYPE="deblur"
-    export MOCEIR_TEST_PATCH_SIZE="128"
-    export MOCEIR_TEST_BATCH_SIZE="1"
-    export MOCEIR_TEST_SAVE_RESULTS="True"
-    export MOCEIR_TEST_RESULTS_DIR="${RESULT_DIR}"
+export MOCEIR_TEST_TRAINSET="standard"
+export MOCEIR_TEST_BENCHMARKS="gopro"
+export MOCEIR_TEST_DE_TYPE="deblur"
+export MOCEIR_TEST_PATCH_SIZE="128"
+export MOCEIR_TEST_BATCH_SIZE="1"
+export MOCEIR_TEST_SAVE_RESULTS="True"
+export MOCEIR_TEST_RESULTS_DIR="${RESULT_DIR}"
     # NOTE: test_uint8.py uses MOCEIR_TEST_RESULTS_DIR for restored images,
     # but uses MOCEIR_TEST_RESULT_DIR for metrics (metrics.json/test.csv).
     # Point both to the same folder to keep outputs together.
     export MOCEIR_TEST_RESULT_DIR="${RESULT_DIR}"
-    export MOCEIR_TEST_PRECISION="fp16"
+export MOCEIR_TEST_PRECISION="fp16"
     export MOCEIR_TEST_FULL_RES_EVAL="True"
 
     if ! CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 test_uint8.py; then
@@ -66,15 +66,15 @@ else
   else
     export MOCEIR_TEST_CKPT_PATH="${CKPT_ENDO}"
     export MOCEIR_TEST_DATA_FILE_DIR="${DATA_ENDO}"
-    export MOCEIR_TEST_TRAINSET="standard"
-    export MOCEIR_TEST_BENCHMARKS="gopro"
-    export MOCEIR_TEST_DE_TYPE="deblur"
-    export MOCEIR_TEST_PATCH_SIZE="128"
-    export MOCEIR_TEST_BATCH_SIZE="1"
-    export MOCEIR_TEST_SAVE_RESULTS="True"
-    export MOCEIR_TEST_RESULTS_DIR="${RESULT_DIR}"
+export MOCEIR_TEST_TRAINSET="standard"
+export MOCEIR_TEST_BENCHMARKS="gopro"
+export MOCEIR_TEST_DE_TYPE="deblur"
+export MOCEIR_TEST_PATCH_SIZE="128"
+export MOCEIR_TEST_BATCH_SIZE="1"
+export MOCEIR_TEST_SAVE_RESULTS="True"
+export MOCEIR_TEST_RESULTS_DIR="${RESULT_DIR}"
     export MOCEIR_TEST_RESULT_DIR="${RESULT_DIR}"
-    export MOCEIR_TEST_PRECISION="fp16"
+export MOCEIR_TEST_PRECISION="fp16"
     export MOCEIR_TEST_FULL_RES_EVAL="True"
 
     if ! CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 test_uint8.py; then
