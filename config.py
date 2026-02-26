@@ -44,7 +44,7 @@ CHECKPOINT_ID = "2026_01_22_20_18_57/checkpoints"  # 例子，换成你自己的
 
 
 DE_TYPE = ["deblur"]  # 可选: "denoise_15/25/50", "dehaze", "derain", "deblur", "synllie"
-TRAINSET = "rga"  # "standard" 或 "CDD11_*"
+TRAINSET = "L1"  # "standard" 或 "CDD11_*"
 # LOSS_TYPE: 选择训练时使用的重建损失
 # - "L1"       : 标准 L1 损失
 # - "fft"      : FFT 频域辅助损失（见 utils.loss_utils.FFTLoss）
