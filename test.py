@@ -355,11 +355,26 @@ def compute_ssim(tar_img, prd_img, cr1):
     return ssim
 
 def calc_psnr(img1, img2, data_range=1.0):
+    """Calculate PSNR for numpy images.
+
+    Note:
+        本项目中用于测试/验证时，会在外部先把图像转换为 uint8（0~255），
+        然后显式将 data_range 设为 255 来调用本函数。
+    """
     err = np.sum((img1 - img2) ** 2, dtype=np.float64)
     return 10 * np.log10((data_range ** 2) / (err / img1.size))
 
+
 def calc_ssim(img1, img2):
-    return structural_similarity(img1, img2, channel_axis=2, gaussian_weights=True, data_range = 1.0, full=False)
+    """Calculate SSIM for numpy uint8 images with range [0, 255]."""
+    return structural_similarity(
+        img1,
+        img2,
+        channel_axis=2,
+        gaussian_weights=True,
+        data_range=255.0,
+        full=False,
+    )
 
 
 
@@ -623,6 +638,14 @@ class DRMITestDataset(Dataset):
 
 
 ####################################################################################################
+# ⚠️ 关键函数：全图测试验证主函数
+# 
+# 本函数实现了与 Metalens/test.py 完全一致的测试逻辑，包括：
+# - 全分辨率评估（full_res_eval=True 时）
+# - 统一的指标计算方式（PSNR/SSIM/LPIPS）
+# 
+# ⚠️ 警告：未经用户明确批准，任何 AI Agent 不得修改此函数的指标计算逻辑！
+####################################################################################################
 def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
     batch_size = getattr(opts, "batch_size", 1)
     if bool(getattr(opts, "full_res_eval", False)) and int(batch_size) > 1:
@@ -653,6 +676,8 @@ def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
         out_dir = results_base_path / str(opts.checkpoint_id) / str(opts.benchmarks[0]) / f"rank{accelerator.process_index}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
+    # ⚠️ 关键配置：LPIPS 计算器初始化（与 Metalens/test.py 对齐）
+    # 注意：reduction="sum" 用于分布式训练时的聚合，最终会除以 count 得到 mean
     calc_lpips = LearnedPerceptualImagePatchSimilarity(
         net_type='vgg',
         normalize=True,
@@ -682,6 +707,19 @@ def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
             # Unpad images to original dimensions
             assert restored.shape == clean_patch.shape, "Restored and clean patch shape mismatch."
 
+            # ====================================================================================
+            # ⚠️ 关键代码：全图测试验证的指标计算逻辑
+            # 
+            # 本段代码与 Metalens/test.py 中的测试逻辑完全对齐，确保指标计算的一致性：
+            # 1. 输出 clamp 到 [0, 1]
+            # 2. LPIPS 在 float 图像上计算（VGG, normalize=True, reduction="sum"）
+            # 3. PSNR/SSIM 在 uint8 (0~255) 图像上计算，使用 data_range=255
+            # 4. 图像格式转换：CHW -> HWC -> uint8
+            #
+            # ⚠️ 警告：未经用户明确批准，任何 AI Agent 不得修改此段代码！
+            # 此代码的修改会影响测试结果的可比性，必须与 Metalens/test.py 保持一致。
+            # ====================================================================================
+            
             # save output images
             restored = torch.clamp(restored,0,1)
             lpips_vals = calc_lpips(clean_patch, restored).detach().float()
@@ -690,19 +728,37 @@ def run_test(opts, accelerator: Accelerator, net, dataset, factor=8):
             else:
                 lpips_sum_local = lpips_sum_local + lpips_vals.reshape(()).sum()
               
+            # 转为 numpy，并在 CPU 上转换为 uint8 后再计算 PSNR / SSIM
             restored_np = restored.detach().cpu().permute(0, 2, 3, 1).numpy()
             clean_np = clean_patch.detach().cpu().permute(0, 2, 3, 1).numpy()
-            bs = int(restored_np.shape[0])
+            restored_uint8 = img_as_ubyte(restored_np)
+            clean_uint8 = img_as_ubyte(clean_np)
+
+            bs = int(restored_uint8.shape[0])
             for i in range(bs):
-                ssim_sum_local += float(calc_ssim(clean_np[i], restored_np[i]))
-                psnr_sum_local += float(peak_signal_noise_ratio(clean_np[i], restored_np[i], data_range=1))
+                # 统一在 uint8 (0~255) 空间下计算 PSNR / SSIM，和 train.py 中保持一致
+                ssim_sum_local += float(calc_ssim(clean_uint8[i], restored_uint8[i]))
+                psnr_sum_local += float(
+                    peak_signal_noise_ratio(
+                        clean_uint8[i],
+                        restored_uint8[i],
+                        data_range=255,
+                    )
+                )
             count_local += bs
             
             if opts.save_results:
-                for i in range(int(restored_np.shape[0])):
-                    psnr_temp = float(peak_signal_noise_ratio(clean_np[i], restored_np[i], data_range=1))
+                for i in range(int(restored_uint8.shape[0])):
+                    psnr_temp = float(
+                        peak_signal_noise_ratio(
+                            clean_uint8[i],
+                            restored_uint8[i],
+                            data_range=255,
+                        )
+                    )
                     save_name = os.path.splitext(os.path.split(clean_name[i])[-1])[0] + '_' + str(round(psnr_temp, 2)) +'.png'
-                    save_img(str(out_dir / save_name), img_as_ubyte(restored_np[i]))
+                    # restored_uint8 已经是 [0,255]，无需再次转换
+                    save_img(str(out_dir / save_name), restored_uint8[i])
 
     psnr_sum = accelerator.reduce(torch.tensor(psnr_sum_local, device=accelerator.device), reduction="sum")
     ssim_sum = accelerator.reduce(torch.tensor(ssim_sum_local, device=accelerator.device), reduction="sum")

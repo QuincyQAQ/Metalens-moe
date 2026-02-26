@@ -139,6 +139,7 @@ def train_options():
         focal_gamma=getattr(config, "FOCAL_GAMMA", 2.0),
         focal_alpha=getattr(config, "FOCAL_ALPHA", 0.1),
         focal_epsilon=getattr(config, "FOCAL_EPSILON", 1e-6),
+        mssim_alpha=getattr(config, "MSSIM_ALPHA", 0.025),
         de_aux_loss_weight=getattr(config, "DE_AUX_LOSS_WEIGHT", 0.0),
         de_aux_gamma=getattr(config, "DE_AUX_GAMMA", 2.0),
         de_aux_alpha=getattr(config, "DE_AUX_ALPHA", None),

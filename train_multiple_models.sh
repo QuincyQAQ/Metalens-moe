@@ -50,9 +50,10 @@ MODEL_LIST=(
   #  "MoCE_IR_S_Wavelet"
   #  "MoCE_IR_Spectral"
   #  "MoCE_IR_Spectral_S"
-#  "MoCE_IR_PhysRouting"
-   #"MoCE_IR_S_PG_GSSE"
-   "MoCE_IR_S_PADG_LKE"
+  # "MoCE_IR_PhysRouting"
+  # "MoCE_IR_S_PG_GSSE"
+  "MoCE_IR_S_PADG_LKE"
+  "MoCE_IR_PG_GLKM"
 )
 
 # 切换到脚本所在目录

@@ -5,9 +5,11 @@ import pathlib
 # 基础训练设置
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
-# 当前临时测试 PFGM-MoE 创新点（一 epoch 自检）
-MODEL = "MoCE_IR_S_PADG_LKE"
-EPOCHS = 500
+# 当前临时测试 PADG-LKE / PG-GLKM 等创新点（本脚本会覆盖 MODEL，这里只是默认值）
+MODEL = "MoCE_IR_PG_GLKM"
+# 为了自检新网络是否能正常训练，这里先将 epoch 设置为 1
+# 真正大规模训练时，你可以把它改回 400
+EPOCHS = 400
 BATCH_SIZE = 32  # 每个GPU的batch size 20
 VAL_EVERY_N_EPOCH = 30  # 每多少个epoch做一次验证
 LR = 2e-4
@@ -44,13 +46,16 @@ CHECKPOINT_ID = "2026_01_22_20_18_57/checkpoints"  # 例子，换成你自己的
 
 
 DE_TYPE = ["deblur"]  # 可选: "denoise_15/25/50", "dehaze", "derain", "deblur", "synllie"
-TRAINSET = "L1"  # "standard" 或 "CDD11_*"
+TRAINSET = "standard"  # "standard" 或 "CDD11_*"
+LOSS_TYPE = "rga"
 # LOSS_TYPE: 选择训练时使用的重建损失
 # - "L1"       : 标准 L1 损失
 # - "fft"      : FFT 频域辅助损失（见 utils.loss_utils.FFTLoss）
 # - "focal_l1" : Focal L1 损失（见 utils.loss_utils.FocalL1Loss）
 # - "rga"      : RGA-Net 风格的 MSE + 0.2 * (1 - SSIM) 损失
-LOSS_TYPE = "rga"
+# - "l1_ssim"  : L1 + 0.2 * (1 - SSIM) 损失
+# - "mssim_l1" : Multi-Scale SSIM + L1 损失（见 utils.ms_ssim_loss.MSSSIML1）
+MSSIM_ALPHA = 0.84 
 PATCH_SIZE = 256
 BALANCE_LOSS_WEIGHT = 0.01
 FFT_LOSS_WEIGHT = 1.0

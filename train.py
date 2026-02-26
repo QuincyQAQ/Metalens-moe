@@ -35,6 +35,7 @@ from options import train_options
 from utils.schedulers import LinearWarmupCosineAnnealingLR
 from data.dataset_utils import AIOTrainDataset, CDD11, IRBenchmarks
 from utils.loss_utils import FFTLoss, FocalL1Loss, FocalLoss
+from utils.ms_ssim_loss import MSSSIML1
 
 # 尝试导入用于计算模型复杂度的库
 try:
@@ -749,8 +750,13 @@ def _calculate_model_complexity(net, input_size=(1, 3, 256, 256)):
         return None, None
 
 
+# ⚠️ 关键函数：训练时的验证评估函数
+# 
+# 本函数实现了与 Metalens/test.py 完全一致的验证逻辑，确保训练时的验证结果与最终测试结果可比。
+# ⚠️ 警告：未经用户明确批准，任何 AI Agent 不得修改此函数的指标计算逻辑！
 def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torch.device) -> dict:
     net.eval()
+    # ⚠️ 关键配置：LPIPS 计算器初始化（与 Metalens/test.py 对齐）
     calc_lpips = LearnedPerceptualImagePatchSimilarity(net_type="vgg", normalize=True, reduction="mean").to(device)
 
     psnr_vals = []
@@ -765,6 +771,20 @@ def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torc
 
             restored = _forward_model(net, degrad_patch, de_id)
             restored = _unpack_restored(restored)
+            
+            # ====================================================================================
+            # ⚠️ 关键代码：训练时验证的指标计算逻辑
+            # 
+            # 本段代码与 Metalens/test.py 和 Metalens-moe/test.py 中的测试逻辑完全对齐：
+            # 1. 输出 clamp 到 [0, 1]
+            # 2. LPIPS 在 float 图像上计算（VGG, normalize=True, reduction="mean"）
+            # 3. PSNR/SSIM 在 uint8 (0~255) 图像上计算，使用 data_range=255
+            # 4. 图像格式转换：CHW -> HWC -> uint8
+            #
+            # ⚠️ 警告：未经用户明确批准，任何 AI Agent 不得修改此段代码！
+            # 此代码的修改会影响验证结果的可比性，必须与 Metalens/test.py 保持一致。
+            # ====================================================================================
+            
             restored = torch.clamp(restored, 0.0, 1.0)
 
             lpips_val = calc_lpips(clean_patch, restored)
@@ -798,7 +818,58 @@ def _evaluate_irbenchmarks(net: nn.Module, data_loader: DataLoader, device: torc
     }
 
 
+def _clear_python_cache(project_dir: pathlib.Path):
+    """删除所有 Python 配置缓存文件（__pycache__ 目录和 .pyc 文件）
+    
+    注意：此函数只清除 Python 的配置缓存，不会影响数据集缓存。
+    数据集缓存（如果有）会被保留，以加快数据加载速度。
+    """
+    if not _is_global_zero():
+        return
+    
+    cache_dirs = []
+    cache_files = []
+    
+    # 递归查找所有 __pycache__ 目录和 .pyc 文件
+    for root, dirs, files in os.walk(project_dir):
+        # 跳过一些不需要清理的目录（避免进入这些目录）
+        # 包括数据集目录，确保不会误删数据集缓存
+        skip_dirs = ['.git', 'experiment', 'test', 'results', 'data', 'dataset', 'datasets']
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+        
+        # 查找 __pycache__ 目录（需要先记录再删除，避免影响 os.walk）
+        if '__pycache__' in dirs:
+            cache_dirs.append(os.path.join(root, '__pycache__'))
+        
+        # 查找 .pyc 文件
+        for file in files:
+            if file.endswith('.pyc'):
+                cache_files.append(os.path.join(root, file))
+    
+    # 删除所有缓存目录
+    for cache_dir in cache_dirs:
+        try:
+            shutil.rmtree(cache_dir)
+        except Exception:
+            pass
+    
+    # 删除所有 .pyc 文件
+    for cache_file in cache_files:
+        try:
+            os.remove(cache_file)
+        except Exception:
+            pass
+    
+    if cache_dirs or cache_files:
+        print(f"[Cache] Cleared {len(cache_dirs)} Python cache directories and {len(cache_files)} .pyc files (dataset cache preserved)", flush=True)
+
+
 def main(opt):
+    # 在训练开始时删除 Python 配置缓存（__pycache__ 和 .pyc），避免配置缓存问题
+    # 注意：只清除配置缓存，数据集缓存会被保留
+    project_dir = pathlib.Path(__file__).resolve().parent
+    _clear_python_cache(project_dir)
+    
     # 不打印完整Options，只保留关键信息
     run_id = os.environ.get("MOCEIRV2_RUN_ID")
     if run_id is None:
@@ -827,7 +898,6 @@ def main(opt):
 
     time_stamp = run_id
 
-    project_dir = pathlib.Path(__file__).resolve().parent
     # 使用配置中的外部 experiment 目录
     experiment_dir = getattr(opt, "experiment_dir", None)
     if experiment_dir:
@@ -923,12 +993,33 @@ def main(opt):
         temp_model = accelerator.unwrap_model(model)
         gflops, params_m = _calculate_model_complexity(temp_model, input_size=(1, 3, 256, 256))
         
+        # 获取 loss 类型信息
+        loss_type = str(getattr(opt, "loss_type", "L1")).upper()
+        loss_info = f"Loss: {loss_type}"
+        
+        # 如果有辅助 loss，也显示
+        if loss_type == "FFT":
+            fft_weight = float(getattr(opt, "fft_loss_weight", 1.0))
+            loss_info = f"Loss: L1 + FFT (weight={fft_weight:.2f})"
+        elif loss_type in ("FOCAL_L1", "FOCALL1", "FOCAL"):
+            gamma = float(getattr(opt, "focal_gamma", getattr(opt, "FOCAL_GAMMA", 2.0)))
+            alpha = float(getattr(opt, "focal_alpha", getattr(opt, "FOCAL_ALPHA", 0.1)))
+            loss_info = f"Loss: FocalL1 (gamma={gamma:.2f}, alpha={alpha:.2f})"
+        elif loss_type in ("RGA", "MSE_SSIM", "MSE-SSIM"):
+            loss_info = "Loss: MSE + 0.2 * (1 - SSIM)"
+        elif loss_type in ("L1_SSIM", "L1-SSIM", "L1SSIM"):
+            loss_info = "Loss: L1 + 0.2 * (1 - SSIM)"
+        elif loss_type in ("MSSIM_L1", "MSSIML1", "MSSSIM_L1", "MSSSIML1"):
+            alpha = float(getattr(opt, "mssim_alpha", 0.025))
+            loss_info = f"Loss: MSSSIM + L1 (alpha={alpha:.3f})"
+        
         print(f"\n{'='*60}")
         print(f"Model: {model_name}")
         if gflops is not None:
             print(f"GFLOPs: {gflops:.5f}")
         else:
             print(f"GFLOPs: N/A")
+        print(f"{loss_info}")
         if params_m is not None:
             print(f"Parameters: {params_m:.5f}M")
         else:
@@ -1093,6 +1184,21 @@ def main(opt):
             return mse + 0.2 * (1.0 - ssim_val)
 
         loss_fn = _rga_loss
+    elif loss_type in ("l1_ssim", "l1-ssim", "l1ssim"):
+        # L1 + SSIM 损失: L1 + 0.2 * (1 - SSIM)
+        l1_loss = nn.L1Loss()
+
+        def _l1_ssim_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+            # 假设输入为 [0, 1] 归一化图像
+            l1 = l1_loss(pred, target)
+            ssim_val = structural_similarity_index_measure(pred, target, data_range=1.0)
+            return l1 + 0.2 * (1.0 - ssim_val)
+
+        loss_fn = _l1_ssim_loss
+    elif loss_type in ("mssim_l1", "mssiml1", "msssim_l1", "msssiml1"):
+        # Multi-Scale SSIM + L1 损失: alpha * (1 - MSSSIM) + (1 - alpha) * L1
+        alpha = float(getattr(opt, "mssim_alpha", 0.025))
+        loss_fn = MSSSIML1(alpha=alpha, data_range=1.0)
 
     best_val_psnr = None
     best_joint_psnr = None
