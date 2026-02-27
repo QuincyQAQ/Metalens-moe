@@ -6,7 +6,7 @@ import pathlib
 # ============================================================================
 # MODEL 可选: "MoCE_IR", "MoCE_IR_S", "ACFormer", "MoCE_IR_PhysRouting", "MoCE_IR_Spectral"
 # 当前临时测试 PADG-LKE / PG-GLKM 等创新点（本脚本会覆盖 MODEL，这里只是默认值）
-MODEL = "MoCE_IR_PG_GLKM"
+MODEL = "MoCE_IR_S_Freq_LKA_SoftFusion"
 # 为了自检新网络是否能正常训练，这里先将 epoch 设置为 1
 # 真正大规模训练时，你可以把它改回 400
 EPOCHS = 400

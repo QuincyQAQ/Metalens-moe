@@ -52,8 +52,22 @@ MODEL_LIST=(
   #  "MoCE_IR_Spectral_S"
   # "MoCE_IR_PhysRouting"
   # "MoCE_IR_S_PG_GSSE"
-  "MoCE_IR_S_PADG_LKE"
-  "MoCE_IR_PG_GLKM"
+  # "MoCE_IR_S_PADG_LKE"
+  # "MoCE_IR_S_PADG_LKE_S3M"
+  # "MoCE_IR_S_PADG_LKE_S3M_ABL"
+  # "MoCE_IR_S_PG_ASS"
+  # "MoCE_IR_S_PA_NOD"
+  #"MoCE_IR_S_PA_DSE_ablation_v2"
+  #"MoCE_IR_S_Freq_LKA_PhysGate"
+  #"MoCE_IR_S_Freq_LKA_SpecRouter"
+  # "MoCE_IR_S_Freq_LKA_SpectralRouter"
+  # "MoCE_IR_S_Freq_LKA_Adaptive"
+  # "MoCE_IR_S_Freq_LKA_PSFRouter"
+  # "MoCE_IR_S_Freq_LKA_PhysConsistent"
+  # 方案A: 可学习融合权重 (Soft Selection)
+  "MoCE_IR_S_Freq_LKA_SoftFusion"
+  # 方案B: 可学习低通滤波 (Learnable Frequency Split)
+  "MoCE_IR_S_Freq_LKA_LearnableLP"
 )
 
 # 切换到脚本所在目录

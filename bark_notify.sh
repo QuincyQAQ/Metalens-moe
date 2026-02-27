@@ -331,8 +331,8 @@ try:
     # 按数据集分组，只统计本次训练的数据集
     datasets = defaultdict(list)
     
-            # 如果指定了本次训练的数据集列表，只统计这些数据集
-            if trained_datasets:
+    # 如果指定了本次训练的数据集列表，只统计这些数据集
+    if trained_datasets:
         # 从后往前遍历，找到每个训练数据集的最新结果（只取最后一次）
         for row in reversed(rows):
             dataset = row.get('dataset', '')
@@ -409,8 +409,8 @@ try:
         msg_parts.append("显示最后几个数据集的最新结果:")
         msg_parts.append("")
     else:
-    msg_parts.append(f"Found {len(datasets)} dataset(s) with test results:")
-    msg_parts.append("")
+        msg_parts.append(f"Found {len(datasets)} dataset(s) with test results:")
+        msg_parts.append("")
     
     # 格式化每个数据集的结果（只显示每个数据集的最新结果）
     for dataset_name in sorted(datasets.keys()):

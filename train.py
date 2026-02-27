@@ -292,11 +292,12 @@ def _copy_experiment_to_test_and_merge_csv(log_dir: pathlib.Path, project_dir: p
     # 2. 或者父目录下有多个以相同前缀开头的子目录（多个数据集实验）
     is_multi_dataset = False
     if parent_test_csv.exists():
-        # 检查父目录下是否有多个子目录（可能是多个数据集实验）
+        # 检查父目录下是否有子目录（可能是多个数据集实验）
+        # 注意：即使只有1个子目录，也可能是多数据集训练中刚完成的那个
         try:
             subdirs = [d for d in parent_dir.iterdir() if d.is_dir() and d.name != "test"]
-            # 如果父目录下有多个子目录，且log_dir是其中一个，说明是多数据集训练
-            if len(subdirs) > 1 and log_dir in subdirs:
+            # 移除 len(subdirs) > 1 限制，确保多数据集训练时复制整个父目录
+            if len(subdirs) >= 1 and log_dir in subdirs:
                 is_multi_dataset = True
         except Exception:
             pass
@@ -1681,12 +1682,14 @@ def main(opt):
                             # 从log_dir推断父目录路径
                             # log_dir格式可能是: experiment/parent_exp_dir/sub_exp_dir
                             parent_exp_path = log_dir.parent
-                            # 检查父目录是否存在且包含多个子实验（多数据集训练的特征）
+                            # 检查父目录是否存在且包含子实验（多数据集训练的特征）
+                            # 只要父目录下有以net_name开头的子目录（至少1个），就使用父目录的test/test.csv
+                            # 注意：即使只有1个子目录，也可能是多数据集训练中刚完成的那个
                             if parent_exp_path.exists():
-                                # 检查父目录下是否有多个子目录（可能是多个数据集实验）
-                                # 如果父目录下有多个以net_name开头的子目录，说明是多数据集训练
+                                # 检查父目录下是否有以net_name开头的子目录
                                 subdirs = [d for d in parent_exp_path.iterdir() if d.is_dir() and d.name.startswith(net_name)]
-                                if len(subdirs) > 1:
+                                # 移除 len(subdirs) > 1 限制，确保多数据集训练的测试结果都保存到父目录
+                                if len(subdirs) >= 1:
                                     exp_test_dir = parent_exp_path / "test"
                         exp_test_dir.mkdir(parents=True, exist_ok=True)
                         exp_csv_path = exp_test_dir / "test.csv"
